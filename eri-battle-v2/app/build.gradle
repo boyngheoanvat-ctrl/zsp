@@ -6,8 +6,8 @@ android {
         applicationId 'com.eri.battlebot'
         minSdk 30
         targetSdk 32
-        versionCode 2
-        versionName '3.0'
+        versionCode 3
+        versionName '3.1-imgui'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
