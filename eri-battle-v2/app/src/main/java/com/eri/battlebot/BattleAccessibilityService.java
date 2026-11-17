@@ -53,6 +53,8 @@ public final class BattleAccessibilityService extends AccessibilityService {
     private long lastBattleTap=0,lastOcrAt=0,lastDeployAt=0;
     private final ArrayDeque<TroopPlanner.Point> pendingTaps=new ArrayDeque<>();
     private int actions=0,totalActions=0;
+    private String requestedFeature=null;
+    private long requestedFeatureAt=0;
     private final Runnable tick=new Runnable(){
         @Override public void run(){
             if(!connected)return;
@@ -91,6 +93,19 @@ public final class BattleAccessibilityService extends AccessibilityService {
                     .putBoolean("enabled",true).putBoolean("stop_request",false).apply();
                 report("Đã yêu cầu bắt đầu chu kỳ mới");
             }
+            @Override public void navigate(String feature){
+                if(!gameForeground()){
+                    report("Hãy mở Clash of Clans rồi chọn "+CocFeatureNavigator.label(feature));
+                    return;
+                }
+                if("scan".equals(feature) || feature.matches("[a-z]+")){
+                    requestedFeature=feature;
+                    requestedFeatureAt=SystemClock.elapsedRealtime();
+                    lastOcrAt=0;
+                    if(imgui!=null)imgui.show(false);
+                    report("Đang đọc màn hình để tìm: "+CocFeatureNavigator.label(feature));
+                }
+            }
         });
         setStage(Stage.READY,"Đang chờ game");
         handler.removeCallbacks(tick);handler.post(tick);
@@ -123,14 +138,19 @@ public final class BattleAccessibilityService extends AccessibilityService {
     }
     private void scan(){
         boolean inGame=gameForeground();
-        if(imgui!=null)imgui.show(inGame);
+        if(requestedFeature!=null && SystemClock.elapsedRealtime()-requestedFeatureAt>12000){
+            String expired=requestedFeature;requestedFeature=null;
+            report("Hết thời gian nhận diện "+CocFeatureNavigator.label(expired));
+        }
+        if(imgui!=null)imgui.show(inGame && requestedFeature==null);
         if(prefs.getBoolean("reset_request",false)){
             prefs.edit().putBoolean("reset_request",false).apply();
             pendingTaps.clear();manualRequested=false;hudConfirmations=0;
             previousBattle=null;lastDeployAt=0;
             setStage(Stage.READY,"Đã đặt lại cho trận tiếp theo");
         }
-        if(prefs.getBoolean("stop_request",false) || !prefs.getBoolean("enabled",false)){
+        if(prefs.getBoolean("stop_request",false) ||
+                (!prefs.getBoolean("enabled",false) && requestedFeature==null)){
             if(!pendingTaps.isEmpty() || stage==Stage.DEPLOYING) stopSequence("Dừng theo yêu cầu");
             prefs.edit().putBoolean("stop_request",false).apply();
             return;
@@ -165,8 +185,13 @@ public final class BattleAccessibilityService extends AccessibilityService {
             frame=hardware.copy(Bitmap.Config.ARGB_8888,false);
             if(frame==null)return;
             screenshotFailures=0;
-            if(!gameForeground()||!prefs.getBoolean("enabled",false))return;
+            if(!gameForeground() || (!prefs.getBoolean("enabled",false) && requestedFeature==null))return;
             long now=SystemClock.elapsedRealtime();
+            if(requestedFeature!=null){
+                handedToOcr=true;
+                recognize(frame);
+                return;
+            }
             if(manualRequested && stage!=Stage.DEPLOYING){
                 manualRequested=false;
                 if(lastDeployAt==0 || now-lastDeployAt>25000){
@@ -216,14 +241,17 @@ public final class BattleAccessibilityService extends AccessibilityService {
             task.addOnSuccessListener(result->{
                 try{parseText(result,frame,scaledW,scaledH);}
                 catch(Throwable ex){report("OCR: "+ex.getClass().getSimpleName());}
-            }).addOnFailureListener(error->report("Không đọc được giao diện trận"))
-              .addOnCompleteListener(result->{
+            }).addOnFailureListener(error->{
+                  requestedFeature=null;
+                  report("Không đọc được chữ trên màn hình");
+              }).addOnCompleteListener(result->{
                 if(!small.isRecycled())small.recycle();
                 if(!frame.isRecycled())frame.recycle();
                 ocrPending=false;
               });
         }catch(Throwable ex){
             ocrPending=false;
+            requestedFeature=null;
             small.recycle();frame.recycle();
             report("OCR chưa sẵn sàng: "+ex.getClass().getSimpleName());
         }
@@ -234,7 +262,31 @@ public final class BattleAccessibilityService extends AccessibilityService {
             .replaceAll("\\p{M}+","").replaceAll("[^a-z0-9 ]"," ").replaceAll(" +"," ").trim();
     }
     private void parseText(Text recognized,Bitmap frame,int ocrW,int ocrH){
-        if(!prefs.getBoolean("enabled",false) || !gameForeground())return;
+        if(!gameForeground())return;
+        if(requestedFeature!=null){
+            String feature=requestedFeature;
+            requestedFeature=null;
+            if("scan".equals(feature)){
+                String text=recognized.getText();
+                if(text.length()>400)text=text.substring(0,400)+"…";
+                report("Đã quét chữ: "+(text.isEmpty()?"không thấy chữ":text.replace('\n',' ')));
+                return;
+            }
+            CocFeatureNavigator.Target found=CocFeatureNavigator.find(
+                recognized,feature,ocrW,ocrH,frame.getWidth(),frame.getHeight());
+            if(found==null){
+                report("Không tìm thấy "+CocFeatureNavigator.label(feature)
+                    +" trên màn hình; hãy mở đúng tab game");
+                return;
+            }
+            prefs.edit().putString("last_match",CocFeatureNavigator.label(feature)
+                +" @("+found.x+","+found.y+") · "+found.seen).apply();
+            report("Đã nhận diện nút "+CocFeatureNavigator.label(feature)
+                +" — đang bấm theo ảnh");
+            tap(found.x,found.y,()->report("Đã bấm "+CocFeatureNavigator.label(feature)));
+            return;
+        }
+        if(!prefs.getBoolean("enabled",false))return;
         StringBuilder all=new StringBuilder();
         Rect returnBox=null;
         for(Text.TextBlock block:recognized.getTextBlocks()){
@@ -364,12 +416,19 @@ public final class BattleAccessibilityService extends AccessibilityService {
     }
     private void setStage(Stage next,String reason){
         stage=next;
-        if(prefs!=null)prefs.edit().putString("phase",next.name())
-            .putString("last_status",reason).apply();
-        if(imgui!=null)imgui.refresh();
+        if(prefs!=null)prefs.edit().putString("phase",next.name()).apply();
+        report(reason);
     }
     private void report(String message){
-        if(prefs!=null)prefs.edit().putString("last_status",message).apply();
+        if(prefs!=null){
+            String recent=prefs.getString("recent_log","");
+            String entry=String.format(Locale.ROOT,"%tT",System.currentTimeMillis())
+                +"  "+message+"\n";
+            recent=(entry+recent);
+            if(recent.length()>3000)recent=recent.substring(0,3000);
+            prefs.edit().putString("last_status",message)
+                .putString("recent_log",recent).apply();
+        }
         if(imgui!=null)imgui.refresh();
     }
 }
