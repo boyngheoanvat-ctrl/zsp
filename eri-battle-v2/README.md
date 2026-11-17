@@ -1,6 +1,14 @@
-# ERI Battle V3
+# ERI Battle V3.1 — ImGui-style overlay
 
 New package `com.eri.battlebot`, created independently from the old Xmagic COC APK.
+
+## In-game ImGui-style menu
+
+- NEW: **✦ ERI** draggable bubble, expandable dark/cyan window with three tabs (Chính/Lính/Cài đặt).
+- Activate and pause the bot, manual deploy/stop/reset; configure troop slots, per-slot drops, auto-deploy and auto-return directly in game.
+- Uses native **Android accessibility overlay widgets styled like Dear ImGui**, not injected Dear ImGui C++/OpenGL. No game modification or root.
+- Floating bubble remains available even when the bot is paused, as long as the accessibility service is running and Clash of Clans is foreground.
+- Minimize window while detecting game UI to avoid covering important areas.
 
 ## User opt-in features
 
