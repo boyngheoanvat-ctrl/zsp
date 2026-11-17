@@ -9,7 +9,7 @@ def replace(before,after):
         raise RuntimeError(f"Expected 1 match, got {n}: {before[:100]}")
     s=s.replace(before,after,1)
 
-replace('#include <algorithm>\n','#include <algorithm>\n#include "ERIGameRuntime.h"\n')
+replace('#include <algorithm>\n','#include <algorithm>\n#include "ERIGameRuntime.h"\n#include "ERIPortDiagnostics.h"\n')
 replace('@property(nonatomic,assign) double currentFPS;\n',
 '''@property(nonatomic,assign) double currentFPS;
 @property(nonatomic,assign) BOOL worldTimeEnabled;
@@ -45,6 +45,12 @@ replace('''                    if(ImGui::BeginTabItem("Tinh nang game")) {
                         ImGui::Text("IL2CPP: %s",game.il2cppLoaded?"loaded":"unavailable");
                         ImGui::TextWrapped("%s",game.detail.c_str());
                         if(ImGui::Button("Quet lop IL2CPP (chi doc)")) ERIGameProbe(true);
+                        if(ImGui::Button("SAO CHEP METHOD REPORT")) {
+                            const std::string text = ERIPortCollectSignatures();
+                            UIPasteboard.generalPasteboard.string =
+                                [NSString stringWithUTF8String:text.c_str()];
+                        }
+                        ImGui::TextDisabled("Method report -> clipboard, de xac minh hook game.");
                         if(game.scannedClasses) {
                             ImGui::Text("Lop da quet: %d | Assembly: %d",game.classesScanned,game.assemblies);
                             ImGui::Text("VehicleMgr: %s",game.vehicleMgrFound?"tim thay":"chua xac dinh");

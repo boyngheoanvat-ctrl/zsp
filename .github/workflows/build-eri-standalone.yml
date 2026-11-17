@@ -1,7 +1,7 @@
 name: Build ERI standalone one-dylib ARM64
 on:
   push:
-    branches: [main, eri-standalone-imgui, eri-standalone-game-runtime-v2]
+    branches: [main, eri-standalone-imgui, eri-standalone-game-runtime-v2, eri-zsm-hook-migration-v3]
     paths:
       - 'standalone/**'
       - '.github/workflows/build-eri-standalone.yml'
@@ -36,7 +36,7 @@ jobs:
             -arch arm64 -miphoneos-version-min=14.0 -isysroot "$SDK" \
             -dynamiclib -stdlib=libc++ -fvisibility=hidden \
             -I/tmp/eri-imgui-vendor -I/tmp/eri-imgui-vendor/backends \
-            standalone/Sources/ERIStandalone.mm standalone/Sources/ERIGameRuntime.mm \
+            standalone/Sources/ERIStandalone.mm standalone/Sources/ERIGameRuntime.mm standalone/Sources/ERIPortDiagnostics.mm \
             /tmp/eri-imgui-vendor/imgui.cpp /tmp/eri-imgui-vendor/imgui_draw.cpp \
             /tmp/eri-imgui-vendor/imgui_widgets.cpp /tmp/eri-imgui-vendor/imgui_tables.cpp \
             /tmp/eri-imgui-vendor/backends/imgui_impl_metal.mm \
