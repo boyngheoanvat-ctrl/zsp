@@ -44,9 +44,8 @@ public final class BattleAccessibilityService extends AccessibilityService {
     private final BattleDetector battleDetector=new BattleDetector();
     private final TroopPlanner planner=new TroopPlanner();
     private TextRecognizer recognizer;
-    private WindowManager windowManager;
-    private LinearLayout overlay;
-    private boolean overlayVisible=false,connected=false,requesting=false,ocrPending=false,manualRequested=false;
+    private EriImGuiOverlay imgui;
+    private boolean connected=false,requesting=false,ocrPending=false,manualRequested=false;
     private String foreground="";
     private Stage stage=Stage.READY;
     private BattleDetector.Match previousBattle;
@@ -67,10 +66,32 @@ public final class BattleAccessibilityService extends AccessibilityService {
         handler=new Handler(Looper.getMainLooper());
         prefs=getSharedPreferences("eri_v2",MODE_PRIVATE);
         recognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-        windowManager=(WindowManager)getSystemService(WINDOW_SERVICE);
         connected=true;
         prefs.edit().putBoolean("service_ready",true).apply();
-        prepareOverlay();
+        imgui=new EriImGuiOverlay(this,prefs,new EriImGuiOverlay.Actions(){
+            @Override public void setEnabled(boolean enabled){
+                prefs.edit().putBoolean("enabled",enabled).putBoolean("stop_request",!enabled).apply();
+                if(enabled && stage!=Stage.DEPLOYING)
+                    setStage(Stage.READY,"Đã bật bot trên menu");
+                if(!enabled)stopSequence("Đã dừng bot từ menu");
+                if(imgui!=null)imgui.refresh();
+            }
+            @Override public void deploy(){
+                if(stage==Stage.DEPLOYING){report("Đang triển khai lính");return;}
+                prefs.edit().putBoolean("enabled",true).putBoolean("stop_request",false).apply();
+                manualRequested=true;
+                report("Đang chụp màn hình để triển khai lính");
+            }
+            @Override public void stop(){
+                prefs.edit().putBoolean("enabled",false).putBoolean("stop_request",true).apply();
+                stopSequence("Đã dừng thao tác từ menu");
+            }
+            @Override public void reset(){
+                prefs.edit().putBoolean("reset_request",true)
+                    .putBoolean("enabled",true).putBoolean("stop_request",false).apply();
+                report("Đã yêu cầu bắt đầu chu kỳ mới");
+            }
+        });
         setStage(Stage.READY,"Đang chờ game");
         handler.removeCallbacks(tick);handler.post(tick);
     }
@@ -83,8 +104,7 @@ public final class BattleAccessibilityService extends AccessibilityService {
         connected=false;
         if(handler!=null)handler.removeCallbacks(tick);
         stopSequence("Đã ngắt dịch vụ");
-        try{if(overlayVisible && windowManager!=null)windowManager.removeView(overlay);}catch(Exception ignored){}
-        overlayVisible=false;
+        if(imgui!=null){imgui.destroy();imgui=null;}
         if(recognizer!=null)recognizer.close();
         if(prefs!=null)prefs.edit().putBoolean("service_ready",false).apply();
         super.onDestroy();
@@ -96,6 +116,8 @@ public final class BattleAccessibilityService extends AccessibilityService {
         return foreground.toLowerCase(Locale.ROOT).contains("clashofclans");
     }
     private void scan(){
+        boolean inGame=gameForeground();
+        if(imgui!=null)imgui.show(inGame);
         if(prefs.getBoolean("reset_request",false)){
             prefs.edit().putBoolean("reset_request",false).apply();
             pendingTaps.clear();manualRequested=false;hudConfirmations=0;
@@ -105,10 +127,8 @@ public final class BattleAccessibilityService extends AccessibilityService {
         if(prefs.getBoolean("stop_request",false) || !prefs.getBoolean("enabled",false)){
             if(!pendingTaps.isEmpty() || stage==Stage.DEPLOYING) stopSequence("Dừng theo yêu cầu");
             prefs.edit().putBoolean("stop_request",false).apply();
-            showOverlay(false);return;
+            return;
         }
-        boolean inGame=gameForeground();
-        showOverlay(inGame);
         if(!inGame){previousBattle=null;return;}
         if(stage==Stage.DEPLOYING || requesting || ocrPending)return;
         requesting=true;
@@ -335,52 +355,10 @@ public final class BattleAccessibilityService extends AccessibilityService {
         stage=next;
         if(prefs!=null)prefs.edit().putString("phase",next.name())
             .putString("last_status",reason).apply();
+        if(imgui!=null)imgui.refresh();
     }
     private void report(String message){
         if(prefs!=null)prefs.edit().putString("last_status",message).apply();
-    }
-    private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
-    private Button overlayButton(String name,int color){
-        Button b=new Button(this);
-        b.setText(name);b.setTextSize(11);b.setAllCaps(false);b.setTextColor(Color.WHITE);
-        GradientDrawable bg=new GradientDrawable();
-        bg.setColor(color);bg.setCornerRadius(dp(14));
-        b.setBackground(bg);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(100),dp(43));
-        p.setMargins(dp(2),0,dp(2),0);b.setLayoutParams(p);
-        return b;
-    }
-    private void prepareOverlay(){
-        overlay=new LinearLayout(this);overlay.setOrientation(LinearLayout.HORIZONTAL);
-        Button deploy=overlayButton("THẢ LÍNH",0xff167bba);
-        Button stop=overlayButton("DỪNG",0xffb13b51);
-        deploy.setOnClickListener(v->{
-            if(stage==Stage.DEPLOYING){report("Đang triển khai lính");return;}
-            manualRequested=true;report("Đang chụp ảnh để thả lính");
-        });
-        stop.setOnClickListener(v->{
-            prefs.edit().putBoolean("stop_request",true).putBoolean("enabled",false).apply();
-            stopSequence("Đã dừng bằng nút nổi");
-            showOverlay(false);
-        });
-        overlay.addView(deploy);overlay.addView(stop);
-    }
-    private void showOverlay(boolean show){
-        if(windowManager==null || overlay==null || show==overlayVisible)return;
-        try{
-            if(show){
-                WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                    PixelFormat.TRANSLUCENT);
-                lp.gravity=Gravity.RIGHT|Gravity.TOP;lp.x=dp(10);lp.y=dp(82);
-                windowManager.addView(overlay,lp);overlayVisible=true;
-            }else{
-                windowManager.removeView(overlay);overlayVisible=false;
-            }
-        }catch(Exception e){overlayVisible=false;report("Không hiện nút nổi: "+e.getClass().getSimpleName());}
+        if(imgui!=null)imgui.refresh();
     }
 }
