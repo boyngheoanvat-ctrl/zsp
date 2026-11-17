@@ -307,7 +307,7 @@ public final class EriImGuiOverlay {
             page.addView(option("Tự động triển khai lính","auto_deploy",false),lp(-1,40));
             featureRow("CHỈNH QUÂN","army","NGHIÊN CỨU","lab");
             featureRow("ANH HÙNG","hero","TRANG BỊ","equipment");
-            featureSingle("THẢ LÍNH BẰNG ẢNH THỰC", "scan");
+            featureSingle("QUÉT CHỮ TRÊN MÀN HÌNH", "scan");
             page.addView(info("Bấm THẢ LÍNH ở tab Chính để thực hiện. Các tọa độ chỉ là ước tính từ ảnh, cần thử trước."),lp(-1,72));
         }else if(selectedTab==3){
             section(page,"LÀNG CHÍNH / NÂNG CẤP");
