@@ -39,9 +39,9 @@ public final class MainActivity extends Activity {
         scroll.addView(layout);
         setContentView(scroll);
         layout.addView(text("MOD BY ERI NGUYỄN",24,0xff5bccff,true));
-        TextView title=text("BATTLE V3 · TỰ TRIỂN KHAI LÍNH",14,0xffb4c7ee,true);
+        TextView title=text("ERI COC V4 · MENU NỔI 6 TAB",14,0xffb4c7ee,true);
         title.setPadding(0,12,0,14);layout.addView(title);
-        layout.addView(text("Bot mới độc lập. Chụp ảnh game qua Trợ năng, tính vị trí thanh lính và vùng triển khai theo màn hình thực tế. Có nút THẢ LÍNH ngay trong game.",14,Color.WHITE,false));
+        layout.addView(text("Bot Android độc lập. Menu nổi 6 tab: Chính, Đấu, Lính, Làng, Hội, Log. Các nút điều hướng tìm chữ trên màn hình game rồi bấm; không mua vật phẩm hoặc dùng gem tự động.",14,Color.WHITE,false));
         status=text("",17,0xff45efd1,true);
         status.setPadding(0,18,0,12);layout.addView(status);
         toggle=button("",0xff217aff);
@@ -67,7 +67,7 @@ public final class MainActivity extends Activity {
         layout.addView(access);
         detail=text("",14,0xffcbd7ed,false);
         detail.setPadding(0,22,0,20);layout.addView(detail);
-        layout.addView(text("CÁCH DÙNG\n1. Bật ERI Battle V2/V3 trong Cài đặt Trợ năng.\n2. Bật bot và chọn số ô lính, số lần thả.\n3. Vào Clash of Clans. Bot tìm nút Battle. Khi trong trận, nó nhận diện thông báo trận và tự chọn lính, thả theo vùng ở mép bản đồ.\n4. Nếu không nhận diện được HUD, nhấn nút nổi THẢ LÍNH trong game. Nút DỪNG sẽ ngắt các lượt chạm còn lại.\n5. Khi trận kết thúc, tùy chọn Tự về nhà chỉ bấm nếu đọc được nút Về nhà từ ảnh.\n\nLưu ý: Chỉ thả các ô lính đã chọn, không bảo đảm thắng; không dùng GPS, root hoặc mã bot Xmagic cũ.",14,0xffe6eafe,false));
+        layout.addView(text("CÁCH DÙNG\n1. Bật ERI COC V4 trong Cài đặt Trợ năng.\n2. Bật bot và chọn số ô lính, số lần thả.\n3. Vào Clash of Clans. Bot tìm nút Battle. Khi trong trận, nó nhận diện thông báo trận và tự chọn lính, thả theo vùng ở mép bản đồ.\n4. Nếu không nhận diện được HUD, nhấn nút nổi THẢ LÍNH trong game. Nút DỪNG sẽ ngắt các lượt chạm còn lại.\n5. Khi trận kết thúc, tùy chọn Tự về nhà chỉ bấm nếu đọc được nút Về nhà từ ảnh.\n\nLưu ý: Menu V4 điều hướng bằng OCR và tự thả lính mức thử nghiệm. Không bảo đảm thao tác được mọi tính năng, không dùng root hoặc mã Xmagic cũ.",14,0xffe6eafe,false));
         updateUi();
     }
     private CheckBox check(String label,String key,boolean defaultValue){
@@ -102,7 +102,7 @@ public final class MainActivity extends Activity {
     private void updateUi(){
         if(status==null)return;
         boolean on=prefs.getBoolean("enabled",false),ready=prefs.getBoolean("service_ready",false);
-        toggle.setText(on?"DỪNG TỰ ĐỘNG":"BẬT BOT BATTLE V3");
+        toggle.setText(on?"DỪNG TỰ ĐỘNG":"BẬT BOT ERI COC V4");
         status.setText(!ready?"● Trợ năng chưa kết nối":on?"● Bot đang theo dõi màn hình":"● Bot đã tạm dừng");
         detail.setText("Trạng thái: "+prefs.getString("last_status","Chưa chạy")
             +"\nChu kỳ: "+prefs.getString("phase","Đợi bật bot")
