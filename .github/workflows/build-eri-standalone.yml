@@ -1,7 +1,7 @@
 name: Build ERI standalone one-dylib ARM64
 on:
   push:
-    branches: [main, eri-standalone-imgui]
+    branches: [main, eri-standalone-imgui, eri-standalone-game-runtime-v2]
     paths:
       - 'standalone/**'
       - '.github/workflows/build-eri-standalone.yml'
@@ -22,6 +22,8 @@ jobs:
           out.write_bytes(gzip.decompress(base64.b64decode(src.read_text().strip(), validate=True)))
           print("Decoded",out,"bytes=",out.stat().st_size)
           PY
+      - name: Patch standalone UI for IL2CPP diagnostics
+        run: python3 standalone/patch_game_runtime.py
       - name: Fetch Dear ImGui v1.92.2
         run: git clone --depth 1 --branch v1.92.2 https://github.com/ocornut/imgui.git /tmp/eri-imgui-vendor
       - name: Build standalone iPhoneOS dylib
@@ -34,7 +36,7 @@ jobs:
             -arch arm64 -miphoneos-version-min=14.0 -isysroot "$SDK" \
             -dynamiclib -stdlib=libc++ -fvisibility=hidden \
             -I/tmp/eri-imgui-vendor -I/tmp/eri-imgui-vendor/backends \
-            standalone/Sources/ERIStandalone.mm \
+            standalone/Sources/ERIStandalone.mm standalone/Sources/ERIGameRuntime.mm \
             /tmp/eri-imgui-vendor/imgui.cpp /tmp/eri-imgui-vendor/imgui_draw.cpp \
             /tmp/eri-imgui-vendor/imgui_widgets.cpp /tmp/eri-imgui-vendor/imgui_tables.cpp \
             /tmp/eri-imgui-vendor/backends/imgui_impl_metal.mm \
