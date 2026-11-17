@@ -21,6 +21,14 @@ public final class CocFeatureNavigator {
     private static final Map<String,String[]> LABELS = new HashMap<>();
     static {
         LABELS.put("battle", new String[]{"chien dau","dau","battle","attack","tan cong"});
+        // Second step after entering Battle: the actual matchmaking button.
+        // Exclude generic "Attack"/"Search" to avoid unintended taps.
+        LABELS.put("findmatch", new String[]{
+            "bat dau tim tran","tim tran","tim tran dau","tim doi thu",
+            "tim kiem doi thu","tim kiem tran","bat dau tim doi thu",
+            "find a match","find match","find opponent",
+            "search for opponent","search for a match","start matchmaking"
+        });
         LABELS.put("army", new String[]{"chinh sua doi quan","doi quan","edit army","army","my army","quan doi"});
         LABELS.put("battlelog", new String[]{"nhat ky chien dau","nhat ky tran","battle log","attack log"});
         LABELS.put("build",new String[]{"xay dung","build","builder","nang cap","upgrade"});
@@ -50,6 +58,7 @@ public final class CocFeatureNavigator {
     public static String label(String feature){
         switch(feature){
             case "battle": return "Chiến đấu";
+            case "findmatch": return "Bắt đầu tìm trận";
             case "army": return "Đội quân";
             case "battlelog":return "Nhật ký chiến đấu";
             case "build":return "Xây dựng";
