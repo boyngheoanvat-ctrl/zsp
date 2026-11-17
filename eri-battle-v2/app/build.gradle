@@ -6,8 +6,8 @@ android {
         applicationId 'com.eri.battlebot'
         minSdk 30
         targetSdk 32
-        versionCode 5
-        versionName '5.0-overlay'
+        versionCode 6
+        versionName '5.1-find-match'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
