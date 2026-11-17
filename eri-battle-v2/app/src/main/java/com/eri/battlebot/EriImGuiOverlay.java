@@ -311,7 +311,7 @@ public final class EriImGuiOverlay {
             page.addView(info("Bấm THẢ LÍNH ở tab Chính để thực hiện. Các tọa độ chỉ là ước tính từ ảnh, cần thử trước."),lp(-1,72));
         }else if(selectedTab==3){
             section(page,"LÀNG CHÍNH / NÂNG CẤP");
-            featureRow("XÂY DỰNG","build","NÂNG CẤP","upgrade");
+            featureRow("XÂY DỰNG","build","XEM NÂNG CẤP","build");
             featureRow("THU TÀI NGUYÊN","collect","PHÒNG THÍ NGHIỆM","lab");
             featureRow("ANH HÙNG","hero","TRANG BỊ","equipment");
             featureRow("THÚ CƯNG","pet","CỬA HÀNG","shop");
