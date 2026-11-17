@@ -32,7 +32,7 @@ s = once(s,
 
 @implementation ERIOverlay""")
 start = s.index("- (id)originalMenu {")
-end = s.index("// The old dylib still builds",start)
+end = s.index("- (void)loadOriginalRows {",start)
 s = s[:start] + """- (id)originalMenu {
     // Class does not exist if the IPA contains ONLY ERIImGuiOverlay.dylib.
     Class type=objc_getClass("AVGamesMenu");
@@ -41,17 +41,17 @@ s = s[:start] + """- (id)originalMenu {
         if(!attemptedDlopen) {
             attemptedDlopen=YES;
             NSString* dir=NSBundle.mainBundle.privateFrameworksPath;
-            NSString* path=[dir stringByAppendingPathComponent:@"zsmvn.dylib"];
+            NSString* path=[dir stringByAppendingPathComponent:@"ERI.dylib"];
             if(path && [NSFileManager.defaultManager fileExistsAtPath:path]) {
                 // The original dylib must be signed and compatible with this IPA.
                 void* handle=dlopen(path.fileSystemRepresentation,RTLD_NOW|RTLD_LOCAL);
                 if(!handle) {
                     const char* why=dlerror();
                     self.bridgeDiagnostic=[NSString stringWithFormat:
-                        @"zsmvn.dylib load failed: %s",why?why:"unknown"];
+                        @"ERI.dylib load failed: %s",why?why:"unknown"];
                 }
             } else {
-                self.bridgeDiagnostic=@"Missing zsmvn.dylib in App.app/Frameworks. ImGui is a UI-only module.";
+                self.bridgeDiagnostic=@"Missing ERI.dylib in App.app/Frameworks. ImGui is a UI-only module.";
             }
         }
         type=objc_getClass("AVGamesMenu");
@@ -125,7 +125,7 @@ s = s[:start] + """- (void)loadOriginalRows {
         self.cachedRows=rows;
         if(rows.count) {
             self.bridgeDiagnostic=[NSString stringWithFormat:
-                 @"Loaded %lu/%lu tabs from zsmvn.dylib",
+                 @"Loaded %lu/%lu tabs from ERI.dylib",
                  (unsigned long)rows.count,(unsigned long)names.count];
             [self suppressOriginalUI];
         } else {
@@ -150,10 +150,16 @@ m = once(m,
 m = once(m,
 'ImGui::TextWrapped("Chua tai duoc danh sach chuc nang. Kiem tra dylib goc.");',
 '''ImGui::TextWrapped("Menu bridge: %s", (diagnostic && *diagnostic) ? diagnostic
-                               : "Waiting for original dylib...");
-            ImGui::TextDisabled("Requires zsmvn.dylib, not only ERIImGuiOverlay.dylib.");
-            ImGui::TextDisabled("Path: Payload/App.app/Frameworks/zsmvn.dylib");''')
+                               : "Waiting for ERI.dylib...");
+            ImGui::TextDisabled("Requires ERI.dylib alongside ERIImGuiOverlay.dylib.");
+            ImGui::TextDisabled("Path: Payload/App.app/Frameworks/ERI.dylib");''')
 
+m = once(m,
+    '    ImGui::End(); ImGui::PopStyleColor(7); ImGui::PopStyleVar(4);',
+    '''    if(diagnostic && *diagnostic && tabs && count) {
+        ImGui::TextDisabled("Bridge: %s", diagnostic);
+    }
+    ImGui::End(); ImGui::PopStyleColor(7); ImGui::PopStyleVar(4);''')
 overlay.write_text(s)
 menu_cpp.write_text(m)
 menu_h.write_text(h)
