@@ -1,11 +1,12 @@
 package com.eri.battlebot;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
-import android.graphics.Point;
 import android.graphics.PixelFormat;
+import android.graphics.Point;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
@@ -21,9 +22,9 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 /**
- * ImGui-inspired Android accessibility overlay (no injection or root).
- * The service can control it without using system-wide draw-over-app permission.
- * The actual Dear ImGui C++ library is not used.
+ * In-game overlay styled after the provided ERI COC screenshot.
+ * Pure Android Accessibility overlay, not injected native Dear ImGui.
+ * This component never changes MainActivity's original layout.
  */
 public final class EriImGuiOverlay {
     public interface Actions {
@@ -33,404 +34,417 @@ public final class EriImGuiOverlay {
         void reset();
         void navigate(String feature);
     }
-
-    private static final int BG=0xF41B2030;
-    private static final int PANEL=0xFF232B3E;
-    private static final int DARK=0xFF151B29;
-    private static final int ACCENT=0xFF47C6F9;
-    private static final int TEXT=0xFFF0F3FA;
-    private static final int MUTED=0xFFA5B3C9;
-    private static final int GREEN=0xFF43E2B2;
-    private static final int RED=0xFFF16F7A;
+    private static final int BG=0xF5141E3B, PANEL=0xEF1B294B, DEEP=0xFF0B1430;
+    private static final int CYAN=0xFF57D8FF, TEXT=0xFFECF5FF, MUTED=0xFF9FB1D0;
+    private static final int RED=0xFFFB6679, GREEN=0xFF67F0C3, BLUE=0xFF368DFF;
     private final AccessibilityService service;
     private final SharedPreferences prefs;
     private final Actions actions;
     private final WindowManager wm;
     private FrameLayout root;
-    private LinearLayout panel;
-    private LinearLayout page;
-    private TextView chip;
-    private TextView statusView,substatusView,logView;
+    private LinearLayout menu;
+    private LinearLayout bodyPage;
+    private TextView icon, headerStatus, logStatus, logDetails, runButton;
     private WindowManager.LayoutParams params;
-    private boolean added=false,open=false;
-    private int selectedTab=0;
-    private int screenW,screenH,panelWidth;
-    private float startX,startY;
-    private int originalX,originalY;
-    private boolean moved;
+    private boolean attached=false, expanded=false, dragging=false;
+    private int currentTab=0, selectedMode=0, screenWidth=0,screenHeight=0, menuWidth=0,menuHeight=0;
+    private int dragX,dragY;
+    private float touchX,touchY;
 
-    public EriImGuiOverlay(AccessibilityService service, SharedPreferences prefs, Actions actions){
-        this.service=service;
-        this.prefs=prefs;
-        this.actions=actions;
-        this.wm=(WindowManager)service.getSystemService(android.content.Context.WINDOW_SERVICE);
-        updateScreenSize();
-        build();
+    public EriImGuiOverlay(AccessibilityService service,SharedPreferences prefs,Actions actions){
+        this.service=service; this.prefs=prefs; this.actions=actions;
+        this.wm=(WindowManager)service.getSystemService(Context.WINDOW_SERVICE);
+        dimensions();
+        create();
     }
-
-    private int dp(float value){return (int)(value*service.getResources().getDisplayMetrics().density+0.5f);}
-    private void updateScreenSize(){
-        Point p=new Point();
-        wm.getDefaultDisplay().getRealSize(p);
-        screenW=p.x;screenH=p.y;
-        panelWidth=Math.min(dp(352),Math.max(dp(235),screenW-dp(24)));
+    private int dp(float x){return Math.round(x*service.getResources().getDisplayMetrics().density);}
+    private void dimensions(){
+        Point p=new Point();wm.getDefaultDisplay().getRealSize(p);
+        screenWidth=p.x;screenHeight=p.y;
+        menuWidth=Math.min(dp(540),Math.max(dp(275),screenWidth-dp(18)));
+        menuHeight=Math.min(dp(360),Math.max(dp(210),screenHeight-dp(12)));
     }
-    private GradientDrawable fill(int color,float radius,int strokeColor,float strokeDp){
-        GradientDrawable d=new GradientDrawable();
-        d.setColor(color);d.setCornerRadius(dp(radius));
-        if(strokeDp>0)d.setStroke(dp(strokeDp),strokeColor);
-        return d;
+    private GradientDrawable fill(int color,int radius,int border){
+        GradientDrawable g=new GradientDrawable();
+        g.setColor(color);g.setCornerRadius(dp(radius));
+        if(border!=0)g.setStroke(dp(1),border);
+        return g;
     }
-    private GradientDrawable gradient(int left,int right,float radius){
-        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{left,right});
-        d.setCornerRadius(dp(radius));return d;
+    private GradientDrawable gradient(int a,int b,int radius){
+        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{a,b});
+        g.setCornerRadius(dp(radius));return g;
     }
-    private LinearLayout vertical(){
-        LinearLayout v=new LinearLayout(service);v.setOrientation(LinearLayout.VERTICAL);return v;
-    }
-    private LinearLayout horizontal(){
-        LinearLayout v=new LinearLayout(service);v.setOrientation(LinearLayout.HORIZONTAL);
-        v.setGravity(Gravity.CENTER_VERTICAL);return v;
-    }
-    private TextView text(String content,int size,int color,boolean bold){
+    private TextView text(String str,int size,int color,boolean strong){
         TextView t=new TextView(service);
-        t.setText(content);t.setTextColor(color);t.setTextSize(size);
+        t.setText(str);t.setTextSize(size);t.setTextColor(color);
         t.setGravity(Gravity.CENTER_VERTICAL);
-        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        if(strong)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         return t;
     }
-    private LinearLayout.LayoutParams lp(int width,int height){
-        return new LinearLayout.LayoutParams(width<0?width:dp(width),height<0?height:dp(height));
+    private LinearLayout horizontal(){
+        LinearLayout l=new LinearLayout(service);
+        l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);
+        return l;
     }
-    private void addSpace(LinearLayout parent,int height){
-        View spacer=new View(service);parent.addView(spacer,lp(1,height));
+    private LinearLayout vertical(){
+        LinearLayout l=new LinearLayout(service);l.setOrientation(LinearLayout.VERTICAL);
+        return l;
     }
-    private void build(){
+    private LinearLayout.LayoutParams size(int w,int h){
+        return new LinearLayout.LayoutParams(w<0?w:dp(w),h<0?h:dp(h));
+    }
+    private void space(LinearLayout target,int height){
+        View v=new View(service);target.addView(v,size(1,height));
+    }
+    private void create(){
         root=new FrameLayout(service);
-        root.setClipChildren(false);root.setClipToPadding(false);
-        chip=text("✦ ERI",14,Color.WHITE,true);
-        chip.setGravity(Gravity.CENTER);
-        chip.setBackground(gradient(0xFF147CBC,0xFF6D43C8,16));
-        FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(67),dp(55),Gravity.TOP|Gravity.LEFT);
-        root.addView(chip,cp);
-        chip.setOnTouchListener(dragHandler(false));
-        panel=vertical();
-        panel.setPadding(dp(1),dp(1),dp(1),dp(1));
-        panel.setBackground(fill(BG,13,ACCENT,1));
-        FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(panelWidth,FrameLayout.LayoutParams.WRAP_CONTENT);
-        root.addView(panel,pp);
-        buildPanel();
-        applyOpen(false);
+        root.setClipChildren(false);
+        icon=text("✦\nERI",13,Color.WHITE,true);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(gradient(0xFF18478B,0xFF0E1F4D,16));
+        root.addView(icon,new FrameLayout.LayoutParams(dp(62),dp(62),Gravity.TOP|Gravity.LEFT));
+        icon.setOnTouchListener(dragListener(false));
+
+        menu=vertical();
+        menu.setBackground(fill(BG,15,0xFF3E6BA0));
+        menu.setClipChildren(true);
+        FrameLayout.LayoutParams mp=new FrameLayout.LayoutParams(menuWidth,menuHeight,Gravity.TOP|Gravity.LEFT);
+        root.addView(menu,mp);
+        drawMenu();
+        applyExpanded(false);
     }
-    private void buildPanel(){
-        LinearLayout header=horizontal();
-        header.setPadding(dp(13),dp(2),dp(6),dp(2));
-        header.setBackground(gradient(0xFF26354A,0xFF1C2940,12));
-        panel.addView(header,lp(-1,52));
-        TextView logo=text("◈",23,ACCENT,true);
-        header.addView(logo,lp(28,-1));
-        LinearLayout headerTexts=vertical();
-        headerTexts.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams weight=new LinearLayout.LayoutParams(0,-1,1);
-        header.addView(headerTexts,weight);
-        TextView title=text("MOD BY ERI NGUYỄN",14,TEXT,true);
-        TextView subtitle=text("BATTLE V3 • IMGUI STYLE",10,MUTED,false);
-        headerTexts.addView(title);headerTexts.addView(subtitle);
-        TextView min=text("—",18,ACCENT,true);
-        min.setGravity(Gravity.CENTER);
-        min.setBackground(fill(0xFF313A52,8,0,0));
-        header.addView(min,lp(35,33));
-        min.setOnClickListener(v->applyOpen(false));
-        header.setOnTouchListener(dragHandler(true));
+    private TextView control(String label,int color){
+        TextView b=text(label,17,color,true);b.setGravity(Gravity.CENTER);
+        b.setBackground(fill(0xFF152040,7,0xFF34446E));
+        return b;
+    }
+    private void drawMenu(){
+        menu.removeAllViews();
+        LinearLayout head=horizontal();head.setPadding(dp(8),dp(5),dp(6),dp(5));
+        head.setBackground(gradient(0xFF152C55,0xFF0C1939,11));
+        menu.addView(head,size(-1,49));
+        TextView logo=text("✦",22,CYAN,true);logo.setGravity(Gravity.CENTER);
+        logo.setBackground(fill(0xFF0C2B58,9,0xFF377CC7));
+        head.addView(logo,size(37,37));
+        LinearLayout name=vertical();
+        name.setPadding(dp(9),0,0,0);
+        name.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams nameP=new LinearLayout.LayoutParams(0,-1,1);
+        head.addView(name,nameP);
+        TextView title=text("ERI COC",16,CYAN,true);
+        name.addView(title);
+        TextView sub=text("Mod By Eri Nguyễn",10,MUTED,false);
+        name.addView(sub);
+        headerStatus=text("● Đang dừng",11,MUTED,false);
+        headerStatus.setPadding(dp(8),0,dp(8),0);
+        headerStatus.setSingleLine(true);headerStatus.setMaxWidth(dp(165));
+        headerStatus.setBackground(fill(0xFF101B38,13,0xFF354B7A));
+        head.addView(headerStatus,size(144,34));
+        View gutter=new View(service);head.addView(gutter,size(5,1));
 
-        LinearLayout tabs=horizontal();
-        tabs.setPadding(dp(8),dp(9),dp(8),dp(8));
-        panel.addView(tabs,lp(-1,51));
-        String[] names={"CHÍNH","ĐẤU","LÍNH","LÀNG","HỘI","LOG"};
-        for(int i=0;i<names.length;i++){
-            final int tab=i;
-            TextView b=text(names[i],9,i==selectedTab?TEXT:MUTED,true);
-            b.setGravity(Gravity.CENTER);
-            b.setTag(i);
-            b.setBackground(fill(i==selectedTab?0xFF25678B:0xFF212B3D,6,i==selectedTab?ACCENT:0xFF34405A,1));
-            LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,dp(34),1);
-            bp.setMargins(dp(3),0,dp(3),0);
-            tabs.addView(b,bp);
-            b.setOnClickListener(v->{selectedTab=tab;drawTabs(tabs);drawPage();});
+        TextView gear=control("⚙",MUTED);
+        head.addView(gear,size(33,32));
+        gear.setOnClickListener(v->{currentTab=6;drawMenu();});
+        TextView minus=control("−",CYAN);
+        head.addView(minus,size(33,32));
+        minus.setOnClickListener(v->applyExpanded(false));
+        TextView close=control("×",RED);
+        head.addView(close,size(33,32));
+        close.setOnClickListener(v->applyExpanded(false));
+        head.setOnTouchListener(dragListener(true));
+
+        LinearLayout content=horizontal();
+        menu.addView(content,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout nav=vertical();
+        nav.setPadding(dp(3),dp(4),dp(4),dp(3));
+        nav.setBackground(fill(0xFF0F1937,0,0));
+        content.addView(nav,size(76,-1));
+        String[] labels={"CHÍNH","ĐÊM","HỘI","NÂNG","KINH ĐÔ","ACC","LOG"};
+        String[] pict={"⌂","☾","♜","⚒","★","♙","≡"};
+        for(int i=0;i<labels.length;i++){
+            final int n=i;
+            TextView tab=text(pict[i]+" "+labels[i],10,i==currentTab?TEXT:MUTED,i==currentTab);
+            tab.setGravity(Gravity.CENTER);
+            tab.setBackground(fill(i==currentTab?0xFF1A4E7D:0xFF111B39,8,i==currentTab?CYAN:0));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,0,1);
+            p.setMargins(0,0,0,dp(2));
+            nav.addView(tab,p);
+            tab.setOnClickListener(v->{currentTab=n;drawMenu();});
         }
-
         ScrollView scroll=new ScrollView(service);
-        scroll.setFillViewport(false);
+        scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
-        LinearLayout.LayoutParams scrollP=new LinearLayout.LayoutParams(-1,Math.min(dp(296),Math.max(dp(144),screenH-dp(173))));
-        panel.addView(scroll,scrollP);
-        page=vertical();page.setPadding(dp(12),dp(6),dp(12),dp(6));
-        scroll.addView(page);
+        content.addView(scroll,new LinearLayout.LayoutParams(0,-1,1));
+        bodyPage=vertical();
+        bodyPage.setPadding(dp(10),dp(6),dp(9),dp(5));
+        scroll.addView(bodyPage);
         drawPage();
 
         LinearLayout footer=horizontal();
-        footer.setPadding(dp(13),dp(6),dp(13),dp(7));
-        footer.setBackground(fill(0xFF172032,0,0,0));
-        panel.addView(footer,lp(-1,37));
-        TextView statusDot=text("●",14,GREEN,true);footer.addView(statusDot,lp(19,-1));
-        TextView footerTitle=text("ERI • NO ROOT",10,MUTED,true);
-        footer.addView(footerTitle,new LinearLayout.LayoutParams(0,-1,1));
-        TextView version=text("v3.1",11,ACCENT,true);footer.addView(version);
+        footer.setPadding(dp(10),dp(4),dp(10),dp(5));
+        footer.setBackground(fill(0xFF111F40,0,0));
+        menu.addView(footer,size(-1,51));
+        runButton=text("▶  RUN",19,Color.WHITE,true);
+        runButton.setGravity(Gravity.CENTER);
+        runButton.setBackground(gradient(0xFF267BF5,0xFF8A4DEA,12));
+        footer.addView(runButton,new LinearLayout.LayoutParams(0,-1,1));
+        runButton.setOnClickListener(v->runCurrentTab());
+        refresh();
     }
-    private void drawTabs(LinearLayout tabs){
-        for(int i=0;i<tabs.getChildCount();i++){
-            View v=tabs.getChildAt(i);
-            if(v instanceof TextView){
-                boolean active=i==selectedTab;
-                ((TextView)v).setTextColor(active?TEXT:MUTED);
-                v.setBackground(fill(active?0xFF25678B:0xFF212B3D,6,active?ACCENT:0xFF34405A,1));
+    private void section(String label){
+        TextView t=text(label,11,0xFF78C7EB,true);t.setAllCaps(true);
+        LinearLayout.LayoutParams p=size(-1,28);
+        bodyPage.addView(t,p);
+    }
+    private void note(String description){
+        TextView t=text(description,11,MUTED,false);
+        t.setPadding(dp(9),dp(6),dp(8),dp(6));
+        t.setBackground(fill(0xFF101C3C,8,0xFF263B6A));
+        bodyPage.addView(t,size(-1,-2));
+    }
+    private void cardRow(String[] labels,String[] emojis,int active){
+        LinearLayout row=horizontal();bodyPage.addView(row,size(-1,94));
+        for(int i=0;i<labels.length;i++){
+            final int mode=i;
+            boolean enabled=i!=1;
+            boolean selected=i==active;
+            LinearLayout card=vertical();
+            card.setGravity(Gravity.CENTER);
+            card.setPadding(dp(2),dp(2),dp(2),dp(2));
+            card.setBackground(fill(selected?0xFF245181:0xFF162547,11,
+                selected?CYAN:0xFF344B71));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(91),1);
+            p.setMargins(dp(2),0,dp(2),0);row.addView(card,p);
+            TextView big=text(emojis[i],29,enabled?0xFFF5CD73:MUTED,true);
+            big.setGravity(Gravity.CENTER);card.addView(big,size(-1,46));
+            TextView name=text(labels[i],9,enabled?TEXT:MUTED,selected);
+            name.setGravity(Gravity.CENTER);name.setMaxLines(2);
+            card.addView(name,size(-1,34));
+            if(enabled){
+                card.setOnClickListener(v->{
+                    selectedMode=mode;prefs.edit().putInt("eri_selected_mode",mode).apply();
+                    drawMenu();
+                });
+            } else {
+                card.setAlpha(.48f);
             }
         }
     }
-    private TextView section(LinearLayout where,String label){
-        TextView t=text(label,12,ACCENT,true);
-        LinearLayout.LayoutParams p=lp(-1,30);p.topMargin=dp(3);
-        where.addView(t,p);return t;
+    private void actionRow(String first,String firstAction,String second,String secondAction){
+        LinearLayout row=horizontal();bodyPage.addView(row,size(-1,36));
+        action(row,first,firstAction,0xFF226DA0);
+        action(row,second,secondAction,0xFF2D477D);
     }
-    private TextView info(String s){
-        TextView t=text(s,12,MUTED,false);
-        t.setPadding(dp(10),dp(7),dp(9),dp(7));
-        t.setBackground(fill(DARK,7,0xFF38465A,1));
-        return t;
+    private void action(LinearLayout parent,String label,String feature,int shade){
+        TextView button=text(label,11,TEXT,true);button.setGravity(Gravity.CENTER);
+        button.setBackground(gradient(shade,0xFF354B82,7));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(34),1);
+        p.setMargins(dp(2),0,dp(2),0);parent.addView(button,p);
+        button.setOnClickListener(v->perform(feature));
     }
-    private void actionButton(LinearLayout into,String label,int color,Runnable click,int height){
-        Button b=new Button(service);
-        b.setAllCaps(false);b.setText(label);
-        b.setTextColor(Color.WHITE);b.setTextSize(12);
-        b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        b.setBackground(gradient(color,color==RED?0xFF933D55:0xFF453999,8));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(height),1);
-        p.setMargins(dp(3),0,dp(3),0);
-        into.addView(b,p);
-        b.setOnClickListener(v->{click.run();if(open)drawPage();});
-    }
-    private CheckBox option(String label,String key,boolean def){
+    private void option(String label,String key,boolean defaultValue){
         CheckBox cb=new CheckBox(service);
-        cb.setButtonTintList(ColorStateList.valueOf(ACCENT));
-        cb.setText(label);cb.setTextColor(TEXT);cb.setTextSize(12);
-        cb.setChecked(prefs.getBoolean(key,def));
-        cb.setPadding(dp(2),0,dp(2),0);
-        cb.setOnCheckedChangeListener((v,checked)->{
-            if("enabled".equals(key))actions.setEnabled(checked);
-            else prefs.edit().putBoolean(key,checked).apply();
-            refresh();
-        });
-        return cb;
+        cb.setText(label);cb.setTextSize(12);cb.setTextColor(TEXT);
+        cb.setButtonTintList(ColorStateList.valueOf(CYAN));
+        cb.setChecked(prefs.getBoolean(key,defaultValue));
+        cb.setOnCheckedChangeListener((btn,checked)->
+            prefs.edit().putBoolean(key,checked).apply());
+        bodyPage.addView(cb,size(-1,32));
     }
-    private void seek(String title,String key,int lo,int hi,int fallback){
-        int value=Math.min(hi,Math.max(lo,prefs.getInt(key,fallback)));
-        LinearLayout row=horizontal();
-        TextView label=text(title,12,TEXT,false);
-        row.addView(label,new LinearLayout.LayoutParams(0,dp(29),1));
-        TextView number=text(Integer.toString(value),12,ACCENT,true);
-        number.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
-        row.addView(number,lp(45,29));
-        page.addView(row);
-        SeekBar bar=new SeekBar(service);
-        bar.setMax(hi-lo);bar.setProgress(value-lo);
-        bar.setProgressTintList(ColorStateList.valueOf(ACCENT));
-        bar.setThumbTintList(ColorStateList.valueOf(ACCENT));
+    private void slider(String name,String key,int min,int max,int defaultValue){
+        int value=Math.max(min,Math.min(max,prefs.getInt(key,defaultValue)));
+        LinearLayout row=horizontal();bodyPage.addView(row,size(-1,27));
+        TextView title=text(name,12,TEXT,true);
+        row.addView(title,new LinearLayout.LayoutParams(0,-1,1));
+        TextView number=text(Integer.toString(value),12,CYAN,true);
+        row.addView(number,size(36,-1));
+        SeekBar bar=new SeekBar(service);bar.setMax(max-min);
+        bar.setProgress(value-min);bar.setProgressTintList(ColorStateList.valueOf(CYAN));
+        bar.setThumbTintList(ColorStateList.valueOf(CYAN));
+        bodyPage.addView(bar,size(-1,32));
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            @Override public void onProgressChanged(SeekBar b,int progress,boolean fromUser){
-                number.setText(Integer.toString(lo+progress));
-                if(fromUser)prefs.edit().putInt(key,lo+progress).apply();
+            public void onProgressChanged(SeekBar s,int progress,boolean user){
+                number.setText(Integer.toString(min+progress));
+                if(user)prefs.edit().putInt(key,min+progress).apply();
             }
-            @Override public void onStartTrackingTouch(SeekBar b){}
-            @Override public void onStopTrackingTouch(SeekBar b){}
+            public void onStartTrackingTouch(SeekBar s){}
+            public void onStopTrackingTouch(SeekBar s){}
         });
-        page.addView(bar,lp(-1,34));
-    }
-    private void featureRow(String firstText,String firstKey,String secondText,String secondKey){
-        LinearLayout row=horizontal();
-        page.addView(row,lp(-1,44));
-        actionButton(row,firstText,0xFF1B6F93,()->{
-            actions.navigate(firstKey);applyOpen(false);
-        },43);
-        actionButton(row,secondText,0xFF414E8D,()->{
-            actions.navigate(secondKey);applyOpen(false);
-        },43);
-        addSpace(page,5);
-    }
-    private void featureSingle(String title,String key){
-        LinearLayout row=horizontal();page.addView(row,lp(-1,43));
-        actionButton(row,title,0xFF246D9A,()->{
-            actions.navigate(key);applyOpen(false);
-        },42);
-        addSpace(page,5);
     }
     private void drawPage(){
-        if(page==null)return;
-        page.removeAllViews();
-        statusView=null;substatusView=null;logView=null;
-        if(selectedTab==0){
-            section(page,"TRẠNG THÁI HỆ THỐNG");
-            statusView=info("Đang khởi tạo...");
-            page.addView(statusView,lp(-1,50));
-            addSpace(page,5);
-            substatusView=text("",11,MUTED,false);
-            substatusView.setMaxLines(3);
-            page.addView(substatusView,lp(-1,49));
-            section(page,"ĐIỀU KHIỂN");
-            LinearLayout row=horizontal();page.addView(row,lp(-1,45));
-            actionButton(row,prefs.getBoolean("enabled",false)?"DỪNG BOT":"BẬT BOT",0xFF157DB2,
-                ()->actions.setEnabled(!prefs.getBoolean("enabled",false)),44);
-            actionButton(row,"THẢ LÍNH",0xFF168C7D,()->actions.deploy(),44);
-            addSpace(page,8);
-            LinearLayout second=horizontal();page.addView(second,lp(-1,43));
-            actionButton(second,"DỪNG NGAY",RED,()->actions.stop(),42);
-            actionButton(second,"LÀM MỚI",0xFF45578E,()->actions.reset(),42);
-            section(page,"MỞ NHANH TRONG GAME");
-            featureRow("CHIẾN ĐẤU","battle","XÂY DỰNG","build");
-            featureRow("ĐỘI QUÂN","army","HỘI","clan");
-        }else if(selectedTab==1){
-            section(page,"TẤN CÔNG / BATTLE");
-            featureRow("CHIẾN ĐẤU","battle","ĐỘI QUÂN","army");
-            featureRow("NHẬT KÝ ĐẤU","battlelog","LÀNG ĐÊM","builderbase");
-            page.addView(option("Tự thả lính khi thấy trận","auto_deploy",false),lp(-1,43));
-            page.addView(option("Nhấn Về nhà sau trận (nếu nhận ra)","auto_return",true),lp(-1,43));
-            addSpace(page,7);
-            LinearLayout action=horizontal();page.addView(action,lp(-1,46));
-            actionButton(action,"THẢ LÍNH",0xFF168C7D,()->actions.deploy(),44);
-            actionButton(action,"DỪNG",RED,()->actions.stop(),44);
-            addSpace(page,7);
-            page.addView(info("Tự tìm Battle từ ảnh. Bot không thể bảo đảm thắng, tự chọn đối thủ hoặc tự hoàn thành mọi trận."),lp(-1,68));
-        }else if(selectedTab==2){
-            section(page,"ĐỘI HÌNH / TROOP DEPLOY");
-            seek("Số ô lính", "troop_slots",1,7,4);
-            seek("Số lượt thả / ô", "drops_per_slot",1,8,4);
-            addSpace(page,5);
-            page.addView(option("Tự động triển khai lính","auto_deploy",false),lp(-1,40));
-            featureRow("CHỈNH QUÂN","army","NGHIÊN CỨU","lab");
-            featureRow("ANH HÙNG","hero","TRANG BỊ","equipment");
-            featureSingle("QUÉT CHỮ TRÊN MÀN HÌNH", "scan");
-            page.addView(info("Bấm THẢ LÍNH ở tab Chính để thực hiện. Các tọa độ chỉ là ước tính từ ảnh, cần thử trước."),lp(-1,72));
-        }else if(selectedTab==3){
-            section(page,"LÀNG CHÍNH / NÂNG CẤP");
-            featureRow("XÂY DỰNG","build","XEM NÂNG CẤP","build");
-            featureRow("THU TÀI NGUYÊN","collect","PHÒNG THÍ NGHIỆM","lab");
-            featureRow("ANH HÙNG","hero","TRANG BỊ","equipment");
-            featureRow("THÚ CƯNG","pet","CỬA HÀNG","shop");
-            featureRow("LÀNG ĐÊM","builderbase","HỒ SƠ","profile");
-            page.addView(info("Chỉ điều hướng đến nút tìm được trên màn hình. Không tự mua gem hoặc xác nhận nâng cấp."),lp(-1,70));
-        }else if(selectedTab==4){
-            section(page,"HỘI / CLAN CAPITAL / SỰ KIỆN");
-            featureRow("MỞ HỘI","clan","CHIẾN TRANH","war");
-            featureRow("TẶNG LÍNH","donate","THỦ ĐÔ HỘI","capital");
-            featureRow("ĐỘT KÍCH","raid","SỰ KIỆN","events");
-            featureRow("HỒ SƠ","profile","NHẬT KÝ ĐẤU","battlelog");
-            page.addView(info("Các nút chỉ điều hướng bằng chữ OCR hiện có trên game; không tự quyên góp hay sử dụng tài nguyên."),lp(-1,74));
-        }else{
-            section(page,"NHẬT KÝ / CHẨN ĐOÁN");
-            logView=text("",11,0xFFCDDBF0,false);
-            logView.setPadding(dp(10),dp(9),dp(9),dp(9));
-            logView.setBackground(fill(DARK,7,0xFF38465A,1));
-            page.addView(logView,lp(-1,172));
-            addSpace(page,8);
-            LinearLayout row=horizontal();page.addView(row,lp(-1,43));
-            actionButton(row,"QUÉT CHỮ MÀN HÌNH",0xFF246D9A,()->{
-                actions.navigate("scan");applyOpen(false);
-            },42);
-            actionButton(row,"THỬ CHU KỲ MỚI",0xFF45578E,()->actions.reset(),42);
-            page.addView(info("Nếu không thấy nút, mở đúng màn hình Clash of Clans rồi thử lại. Bot không tự đoán tọa độ khi OCR thất bại."),lp(-1,67));
+        if(bodyPage==null)return;
+        bodyPage.removeAllViews();logStatus=null;logDetails=null;
+        switch(currentTab){
+            case 0:
+                selectedMode=Math.max(0,Math.min(3,prefs.getInt("eri_selected_mode",0)));
+                section("CHẾ ĐỘ BOT");
+                cardRow(new String[]{"ĐẤU THƯỜNG","ĐẤU RANK\nCHƯA CÓ","CHỈ CHO LÍNH","CHỈ XIN LÍNH"},
+                    new String[]{"⚔","♛","♜","✚"},selectedMode);
+                section("CÀI ĐẶT TRIỂN KHAI");
+                option("Tự thả lính khi vào trận","auto_deploy",false);
+                slider("Số ô lính", "troop_slots",1,7,4);
+                section("ĐẦU HÀNG THÔNG MINH");
+                note("Tính năng này chưa triển khai. RUN chỉ chạy chế độ được hỗ trợ.");
+                break;
+            case 1:
+                section("LÀNG ĐÊM");
+                note("Mở làng thợ xây và các chức năng đang hiển thị trong game.");
+                space(bodyPage,7);
+                actionRow("MỞ LÀNG ĐÊM","builderbase","CHIẾN ĐẤU","battle");
+                space(bodyPage,7);
+                option("Tự nhấn Về nhà khi nhận diện","auto_return",true);
+                break;
+            case 2:
+                section("HỘI / CLAN");
+                actionRow("VÀO HỘI","clan","CHIẾN TRANH","war");
+                space(bodyPage,7);
+                actionRow("TẶNG LÍNH","donate","ĐỘT KÍCH","raid");
+                space(bodyPage,7);
+                actionRow("SỰ KIỆN","events","NHẬT KÝ","battlelog");
+                note("Các nút chỉ mở mục mà OCR đọc được. Không tự chi tài nguyên.");
+                break;
+            case 3:
+                section("NÂNG CẤP");
+                actionRow("XÂY DỰNG","build","NGHIÊN CỨU","lab");
+                space(bodyPage,7);
+                actionRow("ANH HÙNG","hero","TRANG BỊ","equipment");
+                space(bodyPage,7);
+                actionRow("THÚ CƯNG","pet","THU TÀI NGUYÊN","collect");
+                note("Không tự mua gem hoặc xác nhận nâng cấp.");
+                break;
+            case 4:
+                section("KINH ĐÔ HỘI");
+                actionRow("THỦ ĐÔ","capital","ĐỘT KÍCH","raid");
+                space(bodyPage,8);
+                actionRow("HỘI","clan","CHIẾN TRANH","war");
+                note("Điều hướng theo chữ hiển thị trong game. Không tự dùng huy chương.");
+                break;
+            case 5:
+                section("TÀI KHOẢN / ACC");
+                actionRow("HỒ SƠ","profile","ĐỘI QUÂN","army");
+                space(bodyPage,7);
+                actionRow("NHẬT KÝ ĐẤU","battlelog","CỬA HÀNG","shop");
+                note("Không tự chuyển tài khoản hoặc truy cập thông tin đăng nhập.");
+                break;
+            default:
+                section("NHẬT KÝ HOẠT ĐỘNG");
+                logStatus=text("",11,GREEN,true);
+                bodyPage.addView(logStatus,size(-1,27));
+                logDetails=text("",10,MUTED,false);
+                logDetails.setMaxLines(12);
+                bodyPage.addView(logDetails,size(-1,-2));
+                actionRow("QUÉT MÀN HÌNH","scan","LÀM MỚI","reset");
+                break;
         }
         refresh();
     }
-    public void refresh(){
-        if(!added || !open)return;
-        if(statusView!=null){
-            boolean enabled=prefs.getBoolean("enabled",false);
-            String phase=prefs.getString("phase","READY");
-            statusView.setText((enabled?"● ĐANG HOẠT ĐỘNG":"● BOT ĐANG DỪNG")+"  •  "+phase);
-            statusView.setTextColor(enabled?GREEN:RED);
+    private void runCurrentTab(){
+        switch(currentTab){
+            case 0:
+                if(selectedMode==0){
+                    actions.setEnabled(true);
+                    actions.reset();
+                    applyExpanded(false);
+                }else if(selectedMode==2){
+                    perform("donate");
+                }else if(selectedMode==3){
+                    perform("clan");
+                }else{
+                    prefs.edit().putString("last_status",
+                        "Chế độ Đấu rank chưa hỗ trợ").apply();
+                    refresh();
+                }break;
+            case 1:perform("builderbase");break;
+            case 2:perform("clan");break;
+            case 3:perform("build");break;
+            case 4:perform("capital");break;
+            case 5:perform("profile");break;
+            default:refresh();break;
         }
-        if(substatusView!=null)
-            substatusView.setText(prefs.getString("last_status","Chưa có sự kiện"));
-        if(logView!=null)
-            logView.setText(prefs.getString("recent_log","Chưa có log")
-                +"\n\n"+prefs.getString("last_match",""));
     }
-    private View.OnTouchListener dragHandler(boolean draggingPanel){
-        return (v,event)->{
+    private void perform(String feature){
+        if("reset".equals(feature)){actions.reset();refresh();return;}
+        actions.navigate(feature);
+        applyExpanded(false);
+    }
+    public void refresh(){
+        if(headerStatus!=null){
+            boolean running=prefs.getBoolean("enabled",false);
+            headerStatus.setText(running?"● "+prefs.getString("phase","BOT ĐANG CHẠY"):"● Bot đã dừng hoàn toàn");
+            headerStatus.setTextColor(running?GREEN:MUTED);
+        }
+        if(logStatus!=null)
+            logStatus.setText(prefs.getString("last_status","Chưa có hoạt động"));
+        if(logDetails!=null)
+            logDetails.setText(prefs.getString("recent_log","Chưa có log"));
+    }
+    private View.OnTouchListener dragListener(boolean header){
+        return (v,e)->{
             if(params==null)return true;
-            switch(event.getActionMasked()){
+            switch(e.getActionMasked()){
                 case MotionEvent.ACTION_DOWN:
-                    startX=event.getRawX();startY=event.getRawY();
-                    originalX=params.x;originalY=params.y;
-                    moved=false;return true;
+                    touchX=e.getRawX();touchY=e.getRawY();
+                    dragX=params.x;dragY=params.y;dragging=false;
+                    return true;
                 case MotionEvent.ACTION_MOVE:
-                    int dx=Math.round(event.getRawX()-startX);
-                    int dy=Math.round(event.getRawY()-startY);
-                    if(Math.abs(dx)>dp(5)||Math.abs(dy)>dp(5))moved=true;
-                    if(moved){
-                        int width=draggingPanel?panelWidth:dp(67);
-                        int height=draggingPanel?Math.min(dp(440),screenH-dp(12)):dp(55);
-                        params.x=Math.max(dp(2),Math.min(screenW-width-dp(2),originalX+dx));
-                        params.y=Math.max(dp(2),Math.min(screenH-height-dp(2),originalY+dy));
-                        if(added)wm.updateViewLayout(root,params);
+                    int dx=Math.round(e.getRawX()-touchX);
+                    int dy=Math.round(e.getRawY()-touchY);
+                    if(Math.abs(dx)>dp(5)||Math.abs(dy)>dp(5))dragging=true;
+                    if(dragging){
+                        params.x=clamp(dragX+dx,dp(2),screenWidth-(expanded?menuWidth:dp(62))-dp(2));
+                        params.y=clamp(dragY+dy,dp(2),screenHeight-(expanded?menuHeight:dp(62))-dp(2));
+                        if(attached)wm.updateViewLayout(root,params);
                     }
                     return true;
                 case MotionEvent.ACTION_UP:
-                    if(draggingPanel){
-                        prefs.edit().putInt("menu_panel_x",params.x).putInt("menu_panel_y",params.y).apply();
+                    if(header){
+                        prefs.edit().putInt("panel_x",params.x).putInt("panel_y",params.y).apply();
                     }else{
-                        prefs.edit().putInt("menu_chip_x",params.x).putInt("menu_chip_y",params.y).apply();
-                        if(!moved)applyOpen(true);
+                        prefs.edit().putInt("bubble_x",params.x).putInt("bubble_y",params.y).apply();
+                        if(!dragging)applyExpanded(true);
                     }
                     return true;
                 default:return true;
             }
         };
     }
-    private void applyOpen(boolean wantOpen){
-        open=wantOpen;
-        chip.setVisibility(open?View.GONE:View.VISIBLE);
-        panel.setVisibility(open?View.VISIBLE:View.GONE);
+    private int clamp(int v,int min,int max){return Math.max(min,Math.min(Math.max(min,max),v));}
+    private void applyExpanded(boolean state){
+        expanded=state;
+        if(icon!=null)icon.setVisibility(state?View.GONE:View.VISIBLE);
+        if(menu!=null)menu.setVisibility(state?View.VISIBLE:View.GONE);
         if(params!=null){
-            if(open){
-                params.x=prefs.getInt("menu_panel_x",screenW-panelWidth-dp(16));
-                params.y=prefs.getInt("menu_panel_y",dp(65));
-            }else{
-                params.x=prefs.getInt("menu_chip_x",screenW-dp(78));
-                params.y=prefs.getInt("menu_chip_y",dp(86));
-            }
-            int width=open?panelWidth:dp(67);
-            int height=open?Math.min(dp(440),screenH-dp(12)):dp(55);
-            params.x=Math.max(dp(2),Math.min(screenW-width-dp(2),params.x));
-            params.y=Math.max(dp(2),Math.min(screenH-height-dp(2),params.y));
-            if(added){
-                wm.updateViewLayout(root,params);
-                if(open)drawPage();
-            }
+            params.width=state?menuWidth:dp(62);
+            params.height=state?menuHeight:dp(62);
+            params.x=clamp(prefs.getInt(state?"panel_x":"bubble_x",
+                state?dp(55):screenWidth-dp(72)),dp(2),screenWidth-params.width-dp(2));
+            params.y=clamp(prefs.getInt(state?"panel_y":"bubble_y",dp(58)),
+                dp(2),screenHeight-params.height-dp(2));
+            if(attached)wm.updateViewLayout(root,params);
         }
     }
     public void show(boolean visible){
-        if(visible==added)return;
+        if(visible==attached)return;
         try{
             if(visible){
-                updateScreenSize();
-                FrameLayout.LayoutParams pp=(FrameLayout.LayoutParams)panel.getLayoutParams();
-                if(pp.width!=panelWidth){pp.width=panelWidth;panel.setLayoutParams(pp);}
+                dimensions();
                 params=new WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    expanded?menuWidth:dp(62),expanded?menuHeight:dp(62),
                     WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                     PixelFormat.TRANSLUCENT);
                 params.gravity=Gravity.TOP|Gravity.LEFT;
-                applyOpen(open);
-                wm.addView(root,params);added=true;
+                applyExpanded(expanded);
+                wm.addView(root,params);
+                attached=true;
             }else{
-                wm.removeView(root);added=false;
+                wm.removeView(root);attached=false;
             }
         }catch(Exception e){
-            added=false;
-            prefs.edit().putString("last_status","Lỗi menu nổi: "+e.getClass().getSimpleName()).apply();
+            attached=false;
+            prefs.edit().putString("last_status",
+                "Lỗi menu nổi: "+e.getClass().getSimpleName()).apply();
         }
     }
     public void destroy(){show(false);}
