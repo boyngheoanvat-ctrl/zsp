@@ -1,7 +1,7 @@
 name: Build zsp ERI ImGui Rebuild iOS ARM64
 on:
   push:
-    branches: [main, eri-imgui-rebuild]
+    branches: [main, eri-imgui-rebuild, eri-imgui-legacy-bridge-v2, eri-imgui-crash-guard-v3]
     paths:
       - 'eri-imgui/**'
       - '.github/workflows/build-ios-imgui-rebuild.yml'
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-15-arm64
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +42,7 @@ jobs:
           PY
           python3 eri-imgui/fix_overlay.py
           python3 eri-imgui/fix_runtime_bridge.py
+          python3 eri-imgui/fix_startup_guard.py
       - name: Download Dear ImGui v1.92.2
         shell: bash
         run: git clone --depth 1 --branch v1.92.2 https://github.com/ocornut/imgui.git vendor/imgui
