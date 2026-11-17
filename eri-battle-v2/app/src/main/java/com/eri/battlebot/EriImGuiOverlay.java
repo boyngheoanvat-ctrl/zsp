@@ -31,6 +31,7 @@ public final class EriImGuiOverlay {
         void deploy();
         void stop();
         void reset();
+        void navigate(String feature);
     }
 
     private static final int BG=0xF41B2030;
@@ -49,7 +50,7 @@ public final class EriImGuiOverlay {
     private LinearLayout panel;
     private LinearLayout page;
     private TextView chip;
-    private TextView statusView,substatusView;
+    private TextView statusView,substatusView,logView;
     private WindowManager.LayoutParams params;
     private boolean added=false,open=false;
     private int selectedTab=0;
@@ -145,10 +146,10 @@ public final class EriImGuiOverlay {
         LinearLayout tabs=horizontal();
         tabs.setPadding(dp(8),dp(9),dp(8),dp(8));
         panel.addView(tabs,lp(-1,51));
-        String[] names={"CHÍNH","LÍNH","CÀI ĐẶT"};
+        String[] names={"CHÍNH","ĐẤU","LÍNH","LÀNG","HỘI","LOG"};
         for(int i=0;i<names.length;i++){
             final int tab=i;
-            TextView b=text(names[i],11,i==selectedTab?TEXT:MUTED,true);
+            TextView b=text(names[i],9,i==selectedTab?TEXT:MUTED,true);
             b.setGravity(Gravity.CENTER);
             b.setTag(i);
             b.setBackground(fill(i==selectedTab?0xFF25678B:0xFF212B3D,6,i==selectedTab?ACCENT:0xFF34405A,1));
@@ -244,46 +245,98 @@ public final class EriImGuiOverlay {
         });
         page.addView(bar,lp(-1,34));
     }
+    private void featureRow(String firstText,String firstKey,String secondText,String secondKey){
+        LinearLayout row=horizontal();
+        page.addView(row,lp(-1,44));
+        actionButton(row,firstText,0xFF1B6F93,()->{
+            actions.navigate(firstKey);applyOpen(false);
+        },43);
+        actionButton(row,secondText,0xFF414E8D,()->{
+            actions.navigate(secondKey);applyOpen(false);
+        },43);
+        addSpace(page,5);
+    }
+    private void featureSingle(String title,String key){
+        LinearLayout row=horizontal();page.addView(row,lp(-1,43));
+        actionButton(row,title,0xFF246D9A,()->{
+            actions.navigate(key);applyOpen(false);
+        },42);
+        addSpace(page,5);
+    }
     private void drawPage(){
         if(page==null)return;
         page.removeAllViews();
+        statusView=null;substatusView=null;logView=null;
         if(selectedTab==0){
             section(page,"TRẠNG THÁI HỆ THỐNG");
             statusView=info("Đang khởi tạo...");
             page.addView(statusView,lp(-1,50));
             addSpace(page,5);
             substatusView=text("",11,MUTED,false);
-            substatusView.setMaxLines(2);
-            page.addView(substatusView,lp(-1,43));
+            substatusView.setMaxLines(3);
+            page.addView(substatusView,lp(-1,49));
             section(page,"ĐIỀU KHIỂN");
             LinearLayout row=horizontal();page.addView(row,lp(-1,45));
             actionButton(row,prefs.getBoolean("enabled",false)?"DỪNG BOT":"BẬT BOT",0xFF157DB2,
                 ()->actions.setEnabled(!prefs.getBoolean("enabled",false)),44);
             actionButton(row,"THẢ LÍNH",0xFF168C7D,()->actions.deploy(),44);
-            addSpace(page,9);
+            addSpace(page,8);
             LinearLayout second=horizontal();page.addView(second,lp(-1,43));
             actionButton(second,"DỪNG NGAY",RED,()->actions.stop(),42);
             actionButton(second,"LÀM MỚI",0xFF45578E,()->actions.reset(),42);
-        } else if(selectedTab==1){
+            section(page,"MỞ NHANH TRONG GAME");
+            featureRow("CHIẾN ĐẤU","battle","XÂY DỰNG","build");
+            featureRow("ĐỘI QUÂN","army","HỘI","clan");
+        }else if(selectedTab==1){
+            section(page,"TẤN CÔNG / BATTLE");
+            featureRow("CHIẾN ĐẤU","battle","ĐỘI QUÂN","army");
+            featureRow("NHẬT KÝ ĐẤU","battlelog","LÀNG ĐÊM","builderbase");
+            page.addView(option("Tự thả lính khi thấy trận","auto_deploy",false),lp(-1,43));
+            page.addView(option("Nhấn Về nhà sau trận (nếu nhận ra)","auto_return",true),lp(-1,43));
+            addSpace(page,7);
+            LinearLayout action=horizontal();page.addView(action,lp(-1,46));
+            actionButton(action,"THẢ LÍNH",0xFF168C7D,()->actions.deploy(),44);
+            actionButton(action,"DỪNG",RED,()->actions.stop(),44);
+            addSpace(page,7);
+            page.addView(info("Tự tìm Battle từ ảnh. Bot không thể bảo đảm thắng, tự chọn đối thủ hoặc tự hoàn thành mọi trận."),lp(-1,68));
+        }else if(selectedTab==2){
             section(page,"ĐỘI HÌNH / TROOP DEPLOY");
             seek("Số ô lính", "troop_slots",1,7,4);
             seek("Số lượt thả / ô", "drops_per_slot",1,8,4);
             addSpace(page,5);
-            page.addView(option("Tự động triển khai lính","auto_deploy",false),lp(-1,42));
-            page.addView(info("Số lượt sẽ lấy từ cài đặt. Vị trí tính theo ảnh game, không dùng pixel cố định."),lp(-1,64));
+            page.addView(option("Tự động triển khai lính","auto_deploy",false),lp(-1,40));
+            featureRow("CHỈNH QUÂN","army","NGHIÊN CỨU","lab");
+            featureRow("ANH HÙNG","hero","TRANG BỊ","equipment");
+            featureSingle("THẢ LÍNH BẰNG ẢNH THỰC", "scan");
+            page.addView(info("Bấm THẢ LÍNH ở tab Chính để thực hiện. Các tọa độ chỉ là ước tính từ ảnh, cần thử trước."),lp(-1,72));
+        }else if(selectedTab==3){
+            section(page,"LÀNG CHÍNH / NÂNG CẤP");
+            featureRow("XÂY DỰNG","build","NÂNG CẤP","upgrade");
+            featureRow("THU TÀI NGUYÊN","collect","PHÒNG THÍ NGHIỆM","lab");
+            featureRow("ANH HÙNG","hero","TRANG BỊ","equipment");
+            featureRow("THÚ CƯNG","pet","CỬA HÀNG","shop");
+            featureRow("LÀNG ĐÊM","builderbase","HỒ SƠ","profile");
+            page.addView(info("Chỉ điều hướng đến nút tìm được trên màn hình. Không tự mua gem hoặc xác nhận nâng cấp."),lp(-1,70));
+        }else if(selectedTab==4){
+            section(page,"HỘI / CLAN CAPITAL / SỰ KIỆN");
+            featureRow("MỞ HỘI","clan","CHIẾN TRANH","war");
+            featureRow("TẶNG LÍNH","donate","THỦ ĐÔ HỘI","capital");
+            featureRow("ĐỘT KÍCH","raid","SỰ KIỆN","events");
+            featureRow("HỒ SƠ","profile","NHẬT KÝ ĐẤU","battlelog");
+            page.addView(info("Các nút chỉ điều hướng bằng chữ OCR hiện có trên game; không tự quyên góp hay sử dụng tài nguyên."),lp(-1,74));
+        }else{
+            section(page,"NHẬT KÝ / CHẨN ĐOÁN");
+            logView=text("",11,0xFFCDDBF0,false);
+            logView.setPadding(dp(10),dp(9),dp(9),dp(9));
+            logView.setBackground(fill(DARK,7,0xFF38465A,1));
+            page.addView(logView,lp(-1,172));
             addSpace(page,8);
             LinearLayout row=horizontal();page.addView(row,lp(-1,43));
-            actionButton(row,"THẢ LÍNH NGAY",0xFF168C7D,()->actions.deploy(),42);
-        }else{
-            section(page,"CÀI ĐẶT TỰ ĐỘNG");
-            page.addView(option("Tự nhận diện Battle","enabled",false),lp(-1,38));
-            page.addView(option("Tự thả lính trong trận","auto_deploy",false),lp(-1,38));
-            page.addView(option("Tự nhấn Về nhà khi kết thúc","auto_return",true),lp(-1,38));
-            addSpace(page,7);
-            page.addView(info("Menu nổi kiểu ImGui chạy qua Trợ năng Android. Kéo thanh tiêu đề để di chuyển. Nhấn dấu — để thu gọn về icon ERI."),lp(-1,77));
-            addSpace(page,9);
-            LinearLayout row=horizontal();page.addView(row,lp(-1,40));
-            actionButton(row,"THU GỌN MENU",0xFF4A5779,()->applyOpen(false),40);
+            actionButton(row,"QUÉT CHỮ MÀN HÌNH",0xFF246D9A,()->{
+                actions.navigate("scan");applyOpen(false);
+            },42);
+            actionButton(row,"THỬ CHU KỲ MỚI",0xFF45578E,()->actions.reset(),42);
+            page.addView(info("Nếu không thấy nút, mở đúng màn hình Clash of Clans rồi thử lại. Bot không tự đoán tọa độ khi OCR thất bại."),lp(-1,67));
         }
         refresh();
     }
@@ -297,6 +350,9 @@ public final class EriImGuiOverlay {
         }
         if(substatusView!=null)
             substatusView.setText(prefs.getString("last_status","Chưa có sự kiện"));
+        if(logView!=null)
+            logView.setText(prefs.getString("recent_log","Chưa có log")
+                +"\n\n"+prefs.getString("last_match",""));
     }
     private View.OnTouchListener dragHandler(boolean draggingPanel){
         return (v,event)->{
