@@ -1,7 +1,7 @@
 name: Build zsp ERI ImGui Rebuild iOS ARM64
 on:
   push:
-    branches: [eri-imgui-rebuild]
+    branches: [main, eri-imgui-rebuild]
     paths:
       - 'eri-imgui/**'
       - '.github/workflows/build-ios-imgui-rebuild.yml'
@@ -41,6 +41,7 @@ jobs:
           p.write_text(s)
           PY
           python3 eri-imgui/fix_overlay.py
+          python3 eri-imgui/fix_runtime_bridge.py
       - name: Download Dear ImGui v1.92.2
         shell: bash
         run: git clone --depth 1 --branch v1.92.2 https://github.com/ocornut/imgui.git vendor/imgui
