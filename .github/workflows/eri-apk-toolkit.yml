@@ -1,0 +1,37 @@
+name: Package Android APK Tooling
+on:
+  push:
+    branches: [eri-xmagic-original-skin]
+  workflow_dispatch:
+jobs:
+  kit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - name: Install APK build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'build-tools;35.0.0'
+          mkdir -p kit
+          curl -fLsS --retry 3 'https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar' -o kit/apktool.jar
+          cp "$ANDROID_HOME/build-tools/35.0.0/aapt2" kit/
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" kit/
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" kit/
+          cp -r "$ANDROID_HOME/build-tools/35.0.0/lib" kit/
+          chmod +x kit/aapt2 kit/zipalign kit/apksigner
+          du -ah kit | tail -5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ERI_Android_APK_Toolkit
+          path: kit/
+          if-no-files-found: error
