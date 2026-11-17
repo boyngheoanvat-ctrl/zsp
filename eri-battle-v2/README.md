@@ -1,18 +1,25 @@
-# ERI Battle V2
+# ERI Battle V3
 
-Completely new Android package `com.eri.battlebot` — not a patch of the old Xmagic/ERI bot. No old license, library, background bot process, troop routines, or native code included.
+New package `com.eri.battlebot`, created independently from the old Xmagic COC APK.
 
-## Features
-- Pixel-based Battle detection from an **actual Android screenshot** obtained via AccessibilityService.takeScreenshot (Android 11+).
-- Multiscale-safe normalized search region; yellow/orange connected components with geometric confidence.
-- Calculates actual tap coordinates from the detection center, never fixed positions.
-- Confirms location across two screenshots, 4.5-second cooldown, and refuses taps unless Clash of Clans is the foreground app.
-- Entirely offline and no background telemetry.
+## User opt-in features
 
-## Scope
-This app only presses the **Battle** button. It intentionally does not recreate the previous attack cycle, troop deployment, account switching or any other previous bot features.
+- Battle button detection on a *live* AccessibilityService screenshot and automatic centre tap.
+- Troop deployment when the active battle HUD is confirmed by on-device OCR (two successive readings), **only when Auto deploy is switched on**.
+- An accessible floating in-game **THẢ LÍNH** manual trigger for layouts where OCR cannot read the HUD, and a **DỪNG** button to abort remaining taps.
+- Troop card and edge deployment points derived from the screenshot dimensions and image features (approximate; they are not verified deployable regions). Configure 1–7 troop slots, 1–8 taps per slot.
+- Optional on-device OCR of Return Home/Về nhà after deployment. Does not simulate battle completion or guarantee a win.
+- One attack per cycle. Press *Làm mới chu kỳ* before another. State and logs visible in app.
+- No game process modification, memory hooks, account automation or legacy services.
+
+## Limitations
+The V3 detector uses pixel-color heuristics and screen OCR, not Clash of Clans game-state APIs. UI skins, terrain, army layout, language, zoom and game updates can change success rate. Test manually with the game open; only enable Auto deploy after confirming the intended troop slots. A green area in a screenshot is **not** proof deployment is allowed.
+
+Requires Android 11+, Accessibility service with screenshot and gesture privileges. OCR model is bundled in the APK and runs locally. No root required.
 
 ## Build
-Android SDK 35 + JDK 17 + Gradle 8.9. Run `gradle :app:assembleDebug` inside this directory or use the GitHub Actions workflow in this branch.
+JDK 17, Gradle 8.9, Android SDK 35, AGP 8.7.3.
 
-The detector was checked on the user's provided game screenshot, where a large button-shaped connected yellow component was found in the expected bottom-left region. It has **not** been validated by real-device installation yet.
+`gradle :app:assembleDebug` from `eri-battle-v2/`.
+
+GitHub Actions workflow: `.github/workflows/eri-battle-v2.yml` on `eri-battle-v3`.
