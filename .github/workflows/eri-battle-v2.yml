@@ -1,8 +1,8 @@
-name: Build ERI Battle V2 APK
+name: Build ERI Battle V3 APK
 on:
   push:
     branches:
-      - eri-battle-v2
+      - eri-battle-v3
   workflow_dispatch:
 jobs:
   build:
@@ -28,6 +28,6 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: ERI_Battle_V2_APK
+          name: ERI_Battle_V3_APK
           path: eri-battle-v2/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
