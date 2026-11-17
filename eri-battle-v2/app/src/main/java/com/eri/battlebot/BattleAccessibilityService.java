@@ -96,8 +96,12 @@ public final class BattleAccessibilityService extends AccessibilityService {
         handler.removeCallbacks(tick);handler.post(tick);
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
-        if(event!=null && event.getPackageName()!=null)
-            foreground=event.getPackageName().toString();
+        if(event!=null && event.getPackageName()!=null){
+            String name=event.getPackageName().toString();
+            // Touching our accessibility overlay must not hide it as if the
+            // user had switched away from the game.
+            if(!name.equals(getPackageName()))foreground=name;
+        }
     }
     @Override public void onInterrupt(){stopSequence("Trợ năng bị ngắt");}
     @Override public void onDestroy(){
@@ -111,8 +115,10 @@ public final class BattleAccessibilityService extends AccessibilityService {
     }
     private boolean gameForeground(){
         AccessibilityNodeInfo root=getRootInActiveWindow();
-        if(root!=null && root.getPackageName()!=null)
-            foreground=root.getPackageName().toString();
+        if(root!=null && root.getPackageName()!=null){
+            String name=root.getPackageName().toString();
+            if(!name.equals(getPackageName()))foreground=name;
+        }
         return foreground.toLowerCase(Locale.ROOT).contains("clashofclans");
     }
     private void scan(){
