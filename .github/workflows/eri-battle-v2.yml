@@ -1,8 +1,8 @@
-name: Build ERI COC V5 Overlay APK
+name: Build ERI COC V5.1 Match Fix APK
 on:
   push:
     branches:
-      - eri-coc-v5-image-menu
+      - eri-coc-v5-match-fix
   workflow_dispatch:
 jobs:
   build:
@@ -28,6 +28,6 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: ERI_COC_V5_IMGUI_APK
+          name: ERI_COC_V5_1_MATCH_FIX_APK
           path: eri-battle-v2/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
