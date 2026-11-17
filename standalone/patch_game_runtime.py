@@ -9,7 +9,7 @@ def replace(before,after):
         raise RuntimeError(f"Expected 1 match, got {n}: {before[:100]}")
     s=s.replace(before,after,1)
 
-replace('#include <algorithm>\n','#include <algorithm>\n#include "ERIGameRuntime.h"\n#include "ERIPortDiagnostics.h"\n')
+replace('#include <algorithm>\n','#include <algorithm>\n#include "ERIGameRuntime.h"\n#include "ERIPortDiagnostics.h"\n#include "ERITypedTargetReport.h"\n')
 replace('@property(nonatomic,assign) double currentFPS;\n',
 '''@property(nonatomic,assign) double currentFPS;
 @property(nonatomic,assign) BOOL worldTimeEnabled;
@@ -51,6 +51,13 @@ replace('''                    if(ImGui::BeginTabItem("Tinh nang game")) {
                                 [NSString stringWithUTF8String:text.c_str()];
                         }
                         ImGui::TextDisabled("Method report -> clipboard, de xac minh hook game.");
+                        if(ImGui::Button("SAO CHEP HOOK TYPE REPORT")) {
+                            const std::string typed=ERITypedTargetReport();
+                            UIPasteboard.generalPasteboard.string =
+                                [NSString stringWithUTF8String:typed.c_str()];
+                        }
+                        ImGui::TextWrapped("Typed: VehicleMgr/GetRaceCarParams, GarageMgr/SetGarageShowBySkinData, MatchVideoMdl/ReplayVideo, QuickMatchMdl/QuickMatch.");
+                        ImGui::TextDisabled("Doc method/param/return types; CHUA thuc thi hook game.");
                         if(game.scannedClasses) {
                             ImGui::Text("Lop da quet: %d | Assembly: %d",game.classesScanned,game.assemblies);
                             ImGui::Text("VehicleMgr: %s",game.vehicleMgrFound?"tim thay":"chua xac dinh");
