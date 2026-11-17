@@ -1,0 +1,55 @@
+name: Build ERI standalone one-dylib ARM64
+on:
+  push:
+    branches: [main, eri-standalone-imgui]
+    paths:
+      - 'standalone/**'
+      - '.github/workflows/build-eri-standalone.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode standalone source
+        run: |
+          python3 - <<'PY'
+          import base64, gzip
+          from pathlib import Path
+          src=Path("standalone/Sources/ERIStandalone.mm.gz.b64")
+          out=Path("standalone/Sources/ERIStandalone.mm")
+          out.write_bytes(gzip.decompress(base64.b64decode(src.read_text().strip(), validate=True)))
+          print("Decoded",out,"bytes=",out.stat().st_size)
+          PY
+      - name: Fetch Dear ImGui v1.92.2
+        run: git clone --depth 1 --branch v1.92.2 https://github.com/ocornut/imgui.git /tmp/eri-imgui-vendor
+      - name: Build standalone iPhoneOS dylib
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          mkdir -p dist
+          xcrun --sdk iphoneos clang++ -std=c++17 -O2 -fobjc-arc -fblocks \
+            -arch arm64 -miphoneos-version-min=14.0 -isysroot "$SDK" \
+            -dynamiclib -stdlib=libc++ -fvisibility=hidden \
+            -I/tmp/eri-imgui-vendor -I/tmp/eri-imgui-vendor/backends \
+            standalone/Sources/ERIStandalone.mm \
+            /tmp/eri-imgui-vendor/imgui.cpp /tmp/eri-imgui-vendor/imgui_draw.cpp \
+            /tmp/eri-imgui-vendor/imgui_widgets.cpp /tmp/eri-imgui-vendor/imgui_tables.cpp \
+            /tmp/eri-imgui-vendor/backends/imgui_impl_metal.mm \
+            -framework Foundation -framework UIKit -framework Metal \
+            -framework MetalKit -framework QuartzCore -framework CoreGraphics \
+            -Wl,-install_name,@executable_path/Frameworks/ERIStandalone.dylib \
+            -o dist/ERIStandalone.dylib
+          file dist/ERIStandalone.dylib
+          lipo -info dist/ERIStandalone.dylib
+          if otool -L dist/ERIStandalone.dylib | grep -Ei 'zsmvn|ERIImGuiOverlay'; then
+            echo 'ERROR: standalone unexpectedly depends on an old library' >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ERIStandalone-one-dylib-arm64
+          path: dist/ERIStandalone.dylib
+          if-no-files-found: error
