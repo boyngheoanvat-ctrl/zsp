@@ -9,7 +9,7 @@ def replace(before,after):
         raise RuntimeError(f"Expected 1 match, got {n}: {before[:100]}")
     s=s.replace(before,after,1)
 
-replace('#include <algorithm>\n','#include <algorithm>\n#include "ERIGameRuntime.h"\n#include "ERIPortDiagnostics.h"\n#include "ERITypedTargetReport.h"\n')
+replace('#include <algorithm>\n','#include <algorithm>\n#include "ERIGameRuntime.h"\n#include "ERIPortDiagnostics.h"\n#include "ERITypedTargetReport.h"\n#include "ERIRuntimeActions.h"\n')
 replace('@property(nonatomic,assign) double currentFPS;\n',
 '''@property(nonatomic,assign) double currentFPS;
 @property(nonatomic,assign) BOOL worldTimeEnabled;
@@ -58,6 +58,36 @@ replace('''                    if(ImGui::BeginTabItem("Tinh nang game")) {
                         }
                         ImGui::TextWrapped("Typed: VehicleMgr/GetRaceCarParams, GarageMgr/SetGarageShowBySkinData, MatchVideoMdl/ReplayVideo, QuickMatchMdl/QuickMatch.");
                         ImGui::TextDisabled("Doc method/param/return types; CHUA thuc thi hook game.");
+                        ImGui::Separator();
+                        ImGui::TextWrapped("V5 THU NGHIEM: chi thuc hien neu tim duoc instance IL2CPP.");
+                        if(ImGui::Button("KIEM TRA XE DANG SU DUNG")) {
+                            ERIV5ProbeVehicle();
+                        }
+                        static int selectedVehicleID=0;
+                        ImGui::InputInt("Vehicle ID (preview)", &selectedVehicleID);
+                        if(ImGui::Button("HIEN THI XE TRONG GARAGE")) {
+                            if(selectedVehicleID>0)
+                                ERIV5PreviewGarageVehicle((uint32_t)selectedVehicleID);
+                        }
+                        ImGui::TextDisabled("Garage preview khong mo khoa xe/skin.");
+                        static int matchMode=0;
+                        static int matchPlayers=1;
+                        static int matchMap=0;
+                        static int matchUseMap=0;
+                        ImGui::InputInt("Match mode enum", &matchMode);
+                        ImGui::SliderInt("So nguoi choi", &matchPlayers, 1, 8);
+                        ImGui::InputInt("Map ID", &matchMap);
+                        ImGui::InputInt("UseMap enum", &matchUseMap);
+                        if(ImGui::Button("YEU CAU QUICK MATCH")) {
+                            ERIV5QuickMatch(matchMode,(uint8_t)matchPlayers,matchMap,matchUseMap);
+                        }
+                        ImGui::TextDisabled("Goi QuickMatch 1 lan; khong phai auto-match loop.");
+                        if(ImGui::Button("THU THACH SHADOW DANG CHO")) {
+                            ERIV5ReplayWaitingShadow();
+                        }
+                        ImGui::TextDisabled("Khong thay the bot replay cua dylib cu.");
+                        const std::string v5status=ERIV5RuntimeStatus();
+                        ImGui::TextWrapped("V5: %s",v5status.c_str());
                         if(game.scannedClasses) {
                             ImGui::Text("Lop da quet: %d | Assembly: %d",game.classesScanned,game.assemblies);
                             ImGui::Text("VehicleMgr: %s",game.vehicleMgrFound?"tim thay":"chua xac dinh");
