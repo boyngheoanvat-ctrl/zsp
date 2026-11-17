@@ -242,16 +242,21 @@ public final class BattleAccessibilityService extends AccessibilityService {
                 String lineText=plain(line.getText());
                 all.append(lineText).append(' ');
                 Rect b=line.getBoundingBox();
-                if(b!=null && (lineText.contains("return home") || lineText.contains("ve lang")
-                    || lineText.contains("ve nha") || lineText.contains("quay ve")
-                    || lineText.contains("tro ve lang"))){
+                // Exact button-like text only: ignore labels in our own menu
+                // such as "Tự nhấn Về nhà khi kết thúc".
+                boolean homeButton = lineText.equals("return home")
+                    || lineText.equals("ve lang") || lineText.equals("ve nha")
+                    || lineText.equals("quay ve") || lineText.equals("tro ve lang");
+                if(b!=null && homeButton){
                     if(b.centerX()>ocrW*.18 && b.centerX()<ocrW*.83
                         && b.centerY()>ocrH*.37) returnBox=b;
                 }
             }
         }
         String text=all.toString();
-        if(stage==Stage.WAIT_RESULT && returnBox!=null
+        boolean resultScreen = text.contains("victory") || text.contains("defeat")
+            || text.contains("chien thang") || text.contains("that bai");
+        if(stage==Stage.WAIT_RESULT && resultScreen && returnBox!=null
             && prefs.getBoolean("auto_return",true)
             && SystemClock.elapsedRealtime()-lastDeployAt>12000){
             int x=Math.round(returnBox.centerX()*frame.getWidth()/(float)ocrW);
