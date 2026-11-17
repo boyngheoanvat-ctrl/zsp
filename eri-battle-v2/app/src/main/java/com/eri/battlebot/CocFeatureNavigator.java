@@ -112,6 +112,27 @@ public final class CocFeatureNavigator {
                     best=new Target(x,y,line.getText(),feature,confidence);
             }
         }
+        // OCR sometimes wraps "Bắt đầu" and "tìm trận" into two
+        // separate lines of one small text block. Match its combined text.
+        if(best==null && "findmatch".equals(feature)){
+            for(Text.TextBlock block:recognized.getTextBlocks()){
+                Rect bounds=block.getBoundingBox();
+                if(bounds==null || bounds.width()<5 || bounds.height()<5)continue;
+                String normalized=normalize(block.getText());
+                for(String alias:aliases){
+                    if(normalized.equals(alias) ||
+                        (normalized.startsWith(alias+" ") && normalized.length()<=alias.length()+7)){
+                        int x=Math.round(bounds.centerX()*imageW/(float)Math.max(1,ocrW));
+                        int y=Math.round(bounds.centerY()*imageH/(float)Math.max(1,ocrH));
+                        if(x>=10 && x<imageW-10 && y>=10 && y<imageH-10){
+                            best=new Target(x,y,block.getText(),feature,80);
+                            break;
+                        }
+                    }
+                }
+                if(best!=null)break;
+            }
+        }
         return best;
     }
 }
