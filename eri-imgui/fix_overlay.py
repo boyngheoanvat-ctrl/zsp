@@ -108,9 +108,18 @@ s = replace_once(s, '''        CGRect panelRect=(self.open && panel)?CGRectMake(
             static const CGFloat colors[7][3]={{1,.18,.27},{1,.53,.11},{1,.92,.16},
                                                 {.17,.98,.40},{.13,.86,1},
                                                 {.33,.47,1},{.88,.23,.98}};
-            NSInteger i=((NSInteger)(ImGui::GetTime()*8.0))%7;
-            self.rainbowTitle.textColor=[UIColor colorWithRed:colors[i][0]
-                green:colors[i][1] blue:colors[i][2] alpha:1];
+            NSString* name=@"Mod By Eri Nguyễn";
+            NSMutableAttributedString* letters=[[NSMutableAttributedString alloc]
+                initWithString:name attributes:@{NSFontAttributeName:self.rainbowTitle.font}];
+            NSInteger phase=((NSInteger)(ImGui::GetTime()*8.0))%7;
+            for(NSUInteger j=0;j<name.length;j++) {
+                NSInteger hue=(phase+(NSInteger)j)%7;
+                UIColor* ink=[UIColor colorWithRed:colors[hue][0]
+                    green:colors[hue][1] blue:colors[hue][2] alpha:1];
+                [letters addAttribute:NSForegroundColorAttributeName
+                    value:ink range:NSMakeRange(j,1)];
+            }
+            self.rainbowTitle.attributedText=letters;
         }
         ((ERIPassThroughMetalView*)view).panelRect=panelRect;''')
 s = replace_once(s, '''    for(UIWindow* w in app.windows) if(w.isKeyWindow) { window=w; break; }
