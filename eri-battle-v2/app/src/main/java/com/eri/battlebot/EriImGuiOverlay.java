@@ -62,7 +62,7 @@ public final class EriImGuiOverlay {
         this.service=service;
         this.prefs=prefs;
         this.actions=actions;
-        this.wm=(WindowManager)service.getSystemService(AccessibilityService.WINDOW_SERVICE);
+        this.wm=(WindowManager)service.getSystemService(android.content.Context.WINDOW_SERVICE);
         updateScreenSize();
         build();
     }
@@ -206,7 +206,7 @@ public final class EriImGuiOverlay {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(height),1);
         p.setMargins(dp(3),0,dp(3),0);
         into.addView(b,p);
-        b.setOnClickListener(v->{click.run();refresh();});
+        b.setOnClickListener(v->{click.run();if(open)drawPage();});
     }
     private CheckBox option(String label,String key,boolean def){
         CheckBox cb=new CheckBox(service);
@@ -214,7 +214,11 @@ public final class EriImGuiOverlay {
         cb.setText(label);cb.setTextColor(TEXT);cb.setTextSize(12);
         cb.setChecked(prefs.getBoolean(key,def));
         cb.setPadding(dp(2),0,dp(2),0);
-        cb.setOnCheckedChangeListener((v,checked)->prefs.edit().putBoolean(key,checked).apply());
+        cb.setOnCheckedChangeListener((v,checked)->{
+            if("enabled".equals(key))actions.setEnabled(checked);
+            else prefs.edit().putBoolean(key,checked).apply();
+            refresh();
+        });
         return cb;
     }
     private void seek(String title,String key,int lo,int hi,int fallback){
@@ -353,6 +357,8 @@ public final class EriImGuiOverlay {
         try{
             if(visible){
                 updateScreenSize();
+                FrameLayout.LayoutParams pp=(FrameLayout.LayoutParams)panel.getLayoutParams();
+                if(pp.width!=panelWidth){pp.width=panelWidth;panel.setLayoutParams(pp);}
                 params=new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.WRAP_CONTENT,
                     WindowManager.LayoutParams.WRAP_CONTENT,
