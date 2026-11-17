@@ -32,7 +32,7 @@ s = once(s,
 
 @implementation ERIOverlay""")
 start = s.index("- (id)originalMenu {")
-end = s.index("- (void)loadOriginalRows {",start)
+end = s.index("- (void)suppressOriginalUI {",start)
 s = s[:start] + """- (id)originalMenu {
     // Class does not exist if the IPA contains ONLY ERIImGuiOverlay.dylib.
     Class type=objc_getClass("AVGamesMenu");
