@@ -38,7 +38,7 @@ import java.util.Locale;
  * switching, native hooks, game memory access or license dependencies.
  */
 public final class BattleAccessibilityService extends AccessibilityService {
-    private enum Stage { READY, SEARCHING, DEPLOYING, WAIT_RESULT, FINISHED }
+    private enum Stage { READY, SEARCHING, MATCHMAKING, IN_BATTLE, DEPLOYING, WAIT_RESULT, FINISHED }
     private Handler handler;
     private SharedPreferences prefs;
     private final BattleDetector battleDetector=new BattleDetector();
@@ -49,8 +49,9 @@ public final class BattleAccessibilityService extends AccessibilityService {
     private String foreground="";
     private Stage stage=Stage.READY;
     private BattleDetector.Match previousBattle;
+    private CocFeatureNavigator.Target previousFind;
     private int hudConfirmations=0,screenshotFailures=0;
-    private long lastBattleTap=0,lastOcrAt=0,lastDeployAt=0;
+    private long lastBattleTap=0,lastOcrAt=0,lastDeployAt=0,lastMatchTap=0,lastMatchStatus=0;
     private final ArrayDeque<TroopPlanner.Point> pendingTaps=new ArrayDeque<>();
     private int actions=0,totalActions=0;
     private String requestedFeature=null;
@@ -146,7 +147,8 @@ public final class BattleAccessibilityService extends AccessibilityService {
         if(prefs.getBoolean("reset_request",false)){
             prefs.edit().putBoolean("reset_request",false).apply();
             pendingTaps.clear();manualRequested=false;hudConfirmations=0;
-            previousBattle=null;lastDeployAt=0;
+            previousBattle=null;previousFind=null;lastDeployAt=0;
+            lastMatchTap=0;lastBattleTap=0;lastOcrAt=0;lastMatchStatus=0;
             setStage(Stage.READY,"Đã đặt lại cho trận tiếp theo");
         }
         if(prefs.getBoolean("stop_request",false) ||
@@ -210,7 +212,8 @@ public final class BattleAccessibilityService extends AccessibilityService {
                     prefs.edit().putString("last_match","Nút Battle: "+found.x+","+found.y).apply();
                     if(stable){
                         lastBattleTap=now;
-                        setStage(Stage.SEARCHING,"Đã thấy Battle, chuyển sang tìm trận");
+                        previousFind=null;
+                        setStage(Stage.SEARCHING,"Đã bấm Battle, đang tìm nút Bắt đầu tìm trận");
                         tap(found.x,found.y,()->report("Đã bấm Battle từ ảnh"));
                         return;
                     }
@@ -306,6 +309,48 @@ public final class BattleAccessibilityService extends AccessibilityService {
             }
         }
         String text=all.toString();
+        boolean attack=text.contains("battle ends") || text.contains("end battle")
+            || text.contains("surrender") || text.contains("tran dau ket thuc")
+            || text.contains("tran dau con") || text.contains("ket thuc tran dau")
+            || text.contains("thoi gian con lai")
+            || text.contains("time left") || text.contains("battle time");
+        // Battle opens a second screen. V5 previously had no action here,
+        // so it stopped at the 'Find a Match' button without entering battle.
+        if(!attack && (stage==Stage.SEARCHING || stage==Stage.READY)
+            && SystemClock.elapsedRealtime()-lastBattleTap>=1200){
+            CocFeatureNavigator.Target target=CocFeatureNavigator.find(
+                recognized,"findmatch",ocrW,ocrH,frame.getWidth(),frame.getHeight());
+            if(target!=null){
+                boolean confirmed=previousFind!=null
+                    && Math.abs(previousFind.x-target.x)<Math.max(25,frame.getWidth()*.025f)
+                    && Math.abs(previousFind.y-target.y)<Math.max(25,frame.getHeight()*.025f);
+                previousFind=target;
+                prefs.edit().putString("last_match","Tìm trận @("+target.x+","+target.y
+                    +") · "+target.seen).apply();
+                if(confirmed){
+                    previousFind=null;
+                    lastMatchTap=SystemClock.elapsedRealtime();
+                    setStage(Stage.MATCHMAKING,"Đã nhận diện Bắt đầu tìm trận; đang bấm");
+                    tap(target.x,target.y,()->report("Đã bấm Bắt đầu tìm trận; đang chờ đối thủ"));
+                }else{
+                    if(SystemClock.elapsedRealtime()-lastMatchStatus>1500){
+                        report("Thấy Bắt đầu tìm trận; xác nhận ảnh thứ hai");
+                        lastMatchStatus=SystemClock.elapsedRealtime();
+                    }
+                }
+                return;
+            }
+            previousFind=null;
+            if(stage==Stage.SEARCHING && SystemClock.elapsedRealtime()-lastMatchStatus>9000){
+                report("Chưa thấy nút Tìm trận; hãy mở LOG và chụp màn hình đang dừng");
+                lastMatchStatus=SystemClock.elapsedRealtime();
+            }
+        }
+        if(stage==Stage.MATCHMAKING && SystemClock.elapsedRealtime()-lastMatchTap>25000
+            && SystemClock.elapsedRealtime()-lastMatchStatus>18000 && !attack){
+            report("Đã yêu cầu tìm trận, đang chờ ghép đối thủ hoặc vào trận");
+            lastMatchStatus=SystemClock.elapsedRealtime();
+        }
         boolean resultScreen = text.contains("victory") || text.contains("defeat")
             || text.contains("chien thang") || text.contains("that bai");
         if(stage==Stage.WAIT_RESULT && resultScreen && returnBox!=null
@@ -318,23 +363,20 @@ public final class BattleAccessibilityService extends AccessibilityService {
             prefs.edit().putBoolean("enabled",false).apply();
             return;
         }
-        boolean attack=text.contains("battle ends") || text.contains("end battle")
-            || text.contains("surrender") || text.contains("tran dau ket thuc")
-            || text.contains("tran dau con") || text.contains("ket thuc tran dau")
-            || text.contains("thoi gian con lai");
         boolean results=text.contains("victory") || text.contains("defeat")
             || text.contains("chien thang") || text.contains("that bai");
         if(results && stage==Stage.WAIT_RESULT){
             report("Đã nhận diện kết quả trận; chờ nút Về nhà");
         }
-        if(attack && (stage==Stage.READY || stage==Stage.SEARCHING)){
+        if(attack && (stage==Stage.READY || stage==Stage.SEARCHING || stage==Stage.MATCHMAKING)){
             hudConfirmations++;
             if(hudConfirmations>=2){
                 hudConfirmations=0;
+                previousFind=null;
                 if(prefs.getBoolean("auto_deploy",false))
-                    startDeployment(frame,"HUD trận đã xác nhận từ ảnh");
-                else setStage(Stage.SEARCHING,"Đang trong trận; nhấn THẢ LÍNH trên nút nổi");
-            }else report("Đã thấy HUD trận, xác nhận lần 2");
+                    startDeployment(frame,"Đã vào trận; bắt đầu thả lính từ ảnh");
+                else setStage(Stage.IN_BATTLE,"Đã vào trận; bật Tự thả lính hoặc dùng nút THẢ LÍNH");
+            }else report("Đã thấy HUD trận; xác nhận ảnh thứ hai");
         }else if(!attack)hudConfirmations=0;
     }
     private void startDeployment(Bitmap frame,String reason){
