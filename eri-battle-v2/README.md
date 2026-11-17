@@ -1,33 +1,28 @@
-# ERI Battle V3.1 — ImGui-style overlay
+# ERI COC V4 — In-game menu (Android)
 
-New package `com.eri.battlebot`, created independently from the old Xmagic COC APK.
+A new standalone Android AccessibilityService app styled like a compact ImGui overlay. It is **not** a fork of the original Xmagic bot, and it does not modify Clash of Clans binaries or processes.
 
-## In-game ImGui-style menu
+## Features actually implemented
 
-- NEW: **✦ ERI** draggable bubble, expandable dark/cyan window with three tabs (Chính/Lính/Cài đặt).
-- Activate and pause the bot, manual deploy/stop/reset; configure troop slots, per-slot drops, auto-deploy and auto-return directly in game.
-- Uses native **Android accessibility overlay widgets styled like Dear ImGui**, not injected Dear ImGui C++/OpenGL. No game modification or root.
-- Floating bubble remains available even when the bot is paused, as long as the accessibility service is running and Clash of Clans is foreground.
-- Minimize window while detecting game UI to avoid covering important areas.
+- **Six menu tabs:** Chính, Đấu, Lính, Làng, Hội, Log. Compact draggable "✦ ERI" bubble and draggable dark panel.
+- **Offline OCR-assisted, one-action navigation:** After a user presses a menu shortcut, hide the overlay; capture a fresh game screenshot, find the requested on-screen button text, scale its centre to the actual display size and tap **once**. Report a clear error if the button is not visible. No fixed fallback tap and no game memory access.
+- Navigation shortcuts: Battle, Edit Army, Battle Log, Build/Upgrade, Collect (visible "Collect" buttons only), Laboratory, Heroes, Equipment/Blacksmith, Pets, Shop, Builder Base, Profile, Clan, Clan Wars, Donate (opens visible donate button only), Clan Capital, Raids and Events.
+- **Battle automation (experimental, inherited from V3):** image-heuristic Battle identification; configurable troop-slot count and drop count; opt-in auto-deploy when OCR recognizes battle HUD; manual in-game deploy button; optional OCR Return Home.
+- **Diagnostics:** screen-text OCR preview, recent local event log, detected coordinates and phase.
+- **No auto-spending** gems, loot, builder time, raid currency, no confirmation button press for buying/upgrading or donations.
+- **Privacy:** All screenshots and OCR run on device. No uploads or tracking.
+- Android 11+, no root.
 
-## User opt-in features
+## Not implemented (avoid overpromising)
 
-- Battle button detection on a *live* AccessibilityService screenshot and automatic centre tap.
-- Troop deployment when the active battle HUD is confirmed by on-device OCR (two successive readings), **only when Auto deploy is switched on**.
-- An accessible floating in-game **THẢ LÍNH** manual trigger for layouts where OCR cannot read the HUD, and a **DỪNG** button to abort remaining taps.
-- Troop card and edge deployment points derived from the screenshot dimensions and image features (approximate; they are not verified deployable regions). Configure 1–7 troop slots, 1–8 taps per slot.
-- Optional on-device OCR of Return Home/Về nhà after deployment. Does not simulate battle completion or guarantee a win.
-- One attack per cycle. Press *Làm mới chu kỳ* before another. State and logs visible in app.
-- No game process modification, memory hooks, account automation or legacy services.
+This is **not** a fully autonomous Clash of Clans player. It cannot guarantee smart base search, scoring, troop strategy, 3-star wins, accurate upgrade selection, magic-item management, war participation, donation, capital attack or account automation. Menu shortcut buttons navigate only when the corresponding game label is visible in the current screenshot. The user must open nested screens and confirm resource-consuming actions. This protects against unintended spending and version-specific UI changes.
 
-## Limitations
-The V3 detector uses pixel-color heuristics and screen OCR, not Clash of Clans game-state APIs. UI skins, terrain, army layout, language, zoom and game updates can change success rate. Test manually with the game open; only enable Auto deploy after confirming the intended troop slots. A green area in a screenshot is **not** proof deployment is allowed.
+Supercell changed the game UI in October 2026, moving Edit Army and Battle Log into Battle and centralizing upgrades under Build; use the new in-game UI accordingly.
 
-Requires Android 11+, Accessibility service with screenshot and gesture privileges. OCR model is bundled in the APK and runs locally. No root required.
+## Android implementation
 
-## Build
-JDK 17, Gradle 8.9, Android SDK 35, AGP 8.7.3.
+Package `com.eri.battlebot`, version 4.0. It uses AccessibilityService screenshot capture, gesture dispatch and bundled on-device Google ML Kit text recognition. No game injection or root access.
 
-`gradle :app:assembleDebug` from `eri-battle-v2/`.
+Build on GitHub Actions from branch `eri-coc-v4-menu` (`eri-battle-v2/gradle` project). The workflow artifact contains a complete Android APK.
 
-GitHub Actions workflow: `.github/workflows/eri-battle-v2.yml` on `eri-battle-v3`.
+**Testing warning:** CI can confirm successful compilation and package signing; only a device session can confirm that game-specific OCR targets and troop deployment work.
