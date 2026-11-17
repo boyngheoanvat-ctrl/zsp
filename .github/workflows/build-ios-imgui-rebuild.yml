@@ -1,7 +1,7 @@
 name: Build zsp ERI ImGui Rebuild iOS ARM64
 on:
   push:
-    branches: [main, eri-imgui-rebuild]
+    branches: [main, eri-imgui-rebuild, eri-imgui-legacy-bridge-v2]
     paths:
       - 'eri-imgui/**'
       - '.github/workflows/build-ios-imgui-rebuild.yml'
