@@ -29,6 +29,19 @@ jobs:
           cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" kit/
           cp -r "$ANDROID_HOME/build-tools/35.0.0/lib" kit/
           chmod +x kit/aapt2 kit/zipalign kit/apksigner
+          # Bundle native libc++ dependencies for zipalign on other Linux systems.
+          if ! ldconfig -p | grep -q 'libc++.so.1'; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq libc++1 libc++abi1
+          fi
+          for soname in libc++.so.1 libc++abi.so.1 libunwind.so.1; do
+            library=$(ldconfig -p | awk -v so="$soname" '$1 == so {print $NF; exit}')
+            if [ -n "$library" ] && [ -f "$library" ]; then
+              cp -L "$library" "kit/$soname"
+            fi
+          done
+          [ -f kit/libc++.so.1 ] && cp kit/libc++.so.1 kit/libc++.so
+          ls -lh kit/libc++* 2>/dev/null || true
           du -ah kit | tail -5
       - uses: actions/upload-artifact@v4
         with:
