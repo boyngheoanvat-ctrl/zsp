@@ -1,0 +1,64 @@
+name: Build ERI ZSM Android .so (arm64 + armv7)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, eri-zsm-android-port]
+    paths:
+      - 'android-zsm/**'
+      - '.github/workflows/build-eri-zsm-android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android-so:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Android NDK, CMake and Ninja
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          which cmake
+          which ninja
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [[ ! -d "$SDK_ROOT/ndk/27.2.12479018" ]]; then
+            "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+          fi
+          echo "ANDROID_NDK=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Restore audited source and fetch Dear ImGui
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 android-zsm/tools/decode_source.py
+          git clone --depth 1 --branch v1.92.2 https://github.com/ocornut/imgui.git .deps/imgui
+      - name: Build Android ELF .so for two ABIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ABI in arm64-v8a armeabi-v7a; do
+            cmake -S android-zsm -B ".build/$ABI" -G Ninja \
+              "-DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+              "-DANDROID_ABI=$ABI" "-DANDROID_PLATFORM=android-23" \
+              "-DIMGUI_DIR=$GITHUB_WORKSPACE/.deps/imgui" \
+              -DCMAKE_BUILD_TYPE=Release
+            cmake --build ".build/$ABI" --config Release --parallel 2
+            mkdir -p "dist/$ABI"
+            cp ".build/$ABI/liberi_zsm_android.so" "dist/$ABI/"
+            file "dist/$ABI/liberi_zsm_android.so"
+            readelf -h "dist/$ABI/liberi_zsm_android.so" | grep -E 'Class:|Machine:|Type:'
+            readelf -Ws "dist/$ABI/liberi_zsm_android.so" | grep -E 'eri_init$|eri_render_frame$|eri_scan_il2cpp$'
+            ! readelf -d "dist/$ABI/liberi_zsm_android.so" | grep -Ei 'zsmvn|ERIImGuiOverlay'
+          done
+          cp android-zsm/README.md dist/
+          cp android-zsm/include/eri_android.h dist/
+          cp android-zsm/src/eri_android.cpp dist/eri_android.cpp
+          cp android-zsm/CMakeLists.txt dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ERI_ZSM_Android_SO_arm64_armv7
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
