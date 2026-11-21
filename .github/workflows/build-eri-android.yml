@@ -1,0 +1,30 @@
+name: Build ERI ZSM Android ARM64
+on:
+  push:
+    branches: [eri-android-arm64-port-v1, main]
+    paths: ['android/**', '.github/workflows/build-eri-android.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android SDK dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          SDKM="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)"
+          test -x "$SDKM"
+          yes | "$SDKM" --licenses >/dev/null || true
+          "$SDKM" --install 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018'
+      - name: Compile native ARM64
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+          bash android/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ERI-ZSM-Android-arm64-v0.1
+          path: android/dist/libERI.so
+          if-no-files-found: error
