@@ -278,7 +278,7 @@ void* threadmain(void*){
   if(!gVM)continue;
   JNIEnv* e=nullptr;bool attached=false;
   if(gVM->GetEnv((void**)&e,JNI_VERSION_1_6)!=JNI_OK){
-   if(gVM->AttachCurrentThread((void**)&e,nullptr)!=JNI_OK)continue;
+   if(gVM->AttachCurrentThread(&e,nullptr)!=JNI_OK)continue;
    attached=true;
   }
   jobject act=findActivity(e);
